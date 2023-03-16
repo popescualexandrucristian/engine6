@@ -31,6 +31,12 @@ set(EXTERNAL_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external")
 find_package(Vulkan)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
+set(MAIN_RENDERER
+		src/renderer/vulkan/context.cpp
+	)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan")
+source_group(renderer FILES ${MAIN_RENDERER})
+
 if(WIN32)
 	set(MAIN_SRC
 		src/win32/main.cpp
@@ -44,7 +50,7 @@ source_group(main FILES ${MAIN_SRC})
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders_build)
 
 #shaders
-file(GLOB ALL_SHADERS ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.*)
+file(GLOB ALL_SHADERS ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan/shaders/*.*)
 
 #external
 add_subdirectory (${EXTERNAL_LIB_PATH})
@@ -56,6 +62,7 @@ set(LIBS
 if(WIN32)
 	add_executable(${CMAKE_PROJECT_NAME} WIN32 
 		${MAIN_SRC}
+		${MAIN_RENDERER}
 		${ALL_SHADERS}
 	)
 	
@@ -135,7 +142,7 @@ if(ENABLE_ADDRESS_SENITIZER)
 endif()
 
 #build shaders
-source_group(shaders FILES ${ALL_SHADERS})
+source_group(renderer/shaders FILES ${ALL_SHADERS})
 foreach(SHADER ${ALL_SHADERS})
 		get_filename_component(p ${SHADER} NAME)
 		add_shader(${CMAKE_PROJECT_NAME} ${p})

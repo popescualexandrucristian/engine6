@@ -3,11 +3,9 @@ function(add_shader TARGET SHADER)
 	# Find glslc shader compiler.
 	find_program(GLSL_LANG_VALIDATOR glslangValidator)
 	
-	# All shaders for a sample are found here.
-	set(CURRENT_SHADER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/${SHADER})
+	set(CURRENT_SHADER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan/shaders/${SHADER})
 
 	set(CURRENT_OUTPUT_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/${SHADER}.spv)
-
 
 	# Add a custom command to compile GLSL to SPIR-V.
 	get_filename_component(current-output-dir ${CURRENT_OUTPUT_PATH} DIRECTORY)
