@@ -9,7 +9,10 @@
 #include <context.h>
 #include <vulkan/vulkan_win32.h>
 
-#define UPDATE_RATE (1.0/60.0)
+constexpr double update_rate{ 1.0 / 60.0 };
+constexpr uint32_t initial_width = 800;
+constexpr uint32_t initial_height = 600;
+constexpr bool use_vsync = true;
 
 static HWND window_handle = NULL;
 
@@ -212,6 +215,7 @@ void destroy_renderer_surface(VkSurfaceKHR surface, VkInstance instance)
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 }
 
+static renderer_context* render_context = nullptr;
 
 LRESULT WINAPI window_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -219,11 +223,20 @@ LRESULT WINAPI window_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	switch (uMsg) {
 	case WM_PAINT:
+	{
 		ValidateRgn(hWnd, nullptr);
 		return 0;
+	}
 
 	case WM_SIZE:
+	{
+		if (!render_context)
+			return 0;
+		RECT client_rect{};
+		GetClientRect(hWnd, &client_rect);
+		renderer_resize(render_context, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top, use_vsync);
 		return 0;
+	}
 
 	case WM_CHAR:
 		switch (wParam) {
@@ -262,9 +275,11 @@ HWND create_window(char* title, int x, int y, int width, int height, BYTE type, 
 		return NULL;
 	}
 
-	HWND h_wnd = CreateWindow(PROJECT_NAME, title, WS_OVERLAPPEDWINDOW |
-		WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
-		x, y, width, height, NULL, NULL, h_instance, NULL);
+	RECT window_rect = { 0, 0, width, height };
+	AdjustWindowRect(&window_rect, WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, FALSE);
+
+	HWND h_wnd = CreateWindow(PROJECT_NAME, title, WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+		x, y, window_rect.right - window_rect.left, window_rect.bottom - window_rect.top, NULL, NULL, h_instance, NULL);
 
 	if (!h_wnd) {
 		MessageBox(NULL, "CreateWindow() failed:  Cannot create a window.",
@@ -301,7 +316,7 @@ HWND create_window(char* title, int x, int y, int width, int height, BYTE type, 
 
 int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nShowCmd)
 {
-	HWND h_wnd = create_window(const_cast<char*>(PROJECT_NAME " " PROJECT_VERSION), 0, 0, 256, 256, PFD_TYPE_RGBA, 0);
+	HWND h_wnd = create_window(const_cast<char*>(PROJECT_NAME " " PROJECT_VERSION), 0, 0, initial_width, initial_height, PFD_TYPE_RGBA, 0);
 	if (h_wnd == NULL)
 		exit(1);
 
@@ -323,7 +338,7 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	UpdateWindow(h_wnd);
 	window_handle = h_wnd;
 
-	renderer_context* render_context = renderer_init();
+	render_context = renderer_init(initial_width, initial_height, use_vsync);
 	if (!render_context)
 	{
 		MessageBox(NULL, "cannot initialize the rendering context.", "error", MB_OK);
@@ -359,7 +374,7 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 		QueryPerformanceCounter(&current_performance_counter_i);
 		const double current_performance_counter = current_performance_counter_i.QuadPart / performance_frequency;
 		const double time_delta = current_performance_counter - last_performance_counter;
-		if (time_delta > UPDATE_RATE)
+		if (time_delta > update_rate)
 		{
 			last_performance_counter = current_performance_counter;
 

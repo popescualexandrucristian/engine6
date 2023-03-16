@@ -1,39 +1,9 @@
-#include <context.h>
+#include <context_internal.h>
 #include <version.h>
 #include <stdio.h>
 #include <vector>
 #include <log.h>
 #include <swapchain.h>
-
-#define VK_CHECK(x, c)											\
-do																\
-{																\
-	VkResult err = x;											\
-	if (err)													\
-	{															\
-		VkDebugUtilsMessengerCallbackDataEXT debug_data{};		\
-		char result_storage[128] = {0};							\
-		sprintf(result_storage, "vulkan error : %d\n", x);		\
-		debug_data.pMessage = result_storage;					\
-		c->debug_callback(VK_DEBUG_REPORT_ERROR_BIT_EXT,		\
-			VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT,			\
-				0, 0, x, nullptr, result_storage, nullptr);		\
-	}															\
-} while (0)
-
-struct renderer_context
-{
-	VkInstance instance;
-	VkAllocationCallbacks* host_allocator;
-	PFN_vkDebugReportCallbackEXT debug_callback;
-	VkDebugReportCallbackEXT callback_extension;
-	VkPhysicalDevice physical_device;
-	uint32_t graphics_family_index;
-	VkDevice logical_device;
-	VkSurfaceKHR surface;
-	VkFormat swapchain_format;
-	swapchain* swapchain;
-};
 
 static bool register_debug_callback(renderer_context* context)
 {
@@ -253,7 +223,7 @@ static bool select_swapchain_format(renderer_context* context)
 	return true;
 }
 
-renderer_context* renderer_init()
+renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync)
 {
 	renderer_context* out = new renderer_context();
 	out->debug_callback = get_renderer_debug_callback();
@@ -286,7 +256,7 @@ renderer_context* renderer_init()
 	if (!select_swapchain_format(out))
 		goto ERROR;
 
-	out->swapchain = swapchain_init(out);
+	out->swapchain = swapchain_init(out, width, height, use_vsync);
 	if (!out->swapchain)
 		goto ERROR;
 
@@ -297,8 +267,18 @@ ERROR:
 	return nullptr;
 }
 
+bool renderer_resize(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync)
+{
+	return swapchian_update(context->swapchain, context, width, height, use_vsync);
+}
+
 void renderer_update(renderer_context* context, double delta_time)
 {
+	//todo(Alex) : next
+	//renderpass + framebuffers(let's see if we can skip this in 1.3)
+	//pipelines
+	// commands
+	//clear screen
 	(void)context, delta_time;
 }
 
@@ -306,6 +286,9 @@ void renderer_shutdown(renderer_context* context)
 {
 	if (context->instance)
 	{
+		if (context->logical_device)
+			VK_CHECK(vkDeviceWaitIdle(context->logical_device), context);
+
 		if (context->swapchain)
 		{
 			swapchian_destroy(context->swapchain, context);
