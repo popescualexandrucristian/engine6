@@ -32,11 +32,15 @@ find_package(Vulkan)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
 set(MAIN_RENDERER
+		src/renderer/vulkan/context.h
+		src/renderer/vulkan/swapchain.h
 		src/renderer/vulkan/context.cpp
+		src/renderer/vulkan/swapchain.cpp
 	)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan")
 source_group(renderer FILES ${MAIN_RENDERER})
 
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 if(WIN32)
 	set(MAIN_SRC
 		src/win32/main.cpp
