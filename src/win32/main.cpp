@@ -323,13 +323,8 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 #ifdef  ENABLE_DEBUG_CONSOLE
 	AllocConsole();
 	SetConsoleTitleA(PROJECT_NAME " " PROJECT_VERSION " log");
-	typedef struct { char* _ptr; int _cnt; char* _base; int _flag; int _file; int _charbuf; int _bufsiz; char* _tmpfname; } FILE_COMPLETE;
-	*(FILE_COMPLETE*)stdout = *(FILE_COMPLETE*)_fdopen(_open_osfhandle(intptr_t(GetStdHandle(STD_OUTPUT_HANDLE)), _O_TEXT), "w");
-	*(FILE_COMPLETE*)stderr = *(FILE_COMPLETE*)_fdopen(_open_osfhandle(intptr_t(GetStdHandle(STD_ERROR_HANDLE)), _O_TEXT), "w");
-	*(FILE_COMPLETE*)stdin = *(FILE_COMPLETE*)_fdopen(_open_osfhandle(intptr_t(GetStdHandle(STD_INPUT_HANDLE)), _O_TEXT), "r");
-	setvbuf(stdout, NULL, _IONBF, 0);
-	setvbuf(stderr, NULL, _IONBF, 0);
-	setvbuf(stdin, NULL, _IONBF, 0);
+	freopen("CONOUT$", "w", stdout);
+	freopen("CONIN$", "r", stdin);
 
 	printf("logging started for %s\n", PROJECT_NAME " " PROJECT_VERSION);
 #endif
