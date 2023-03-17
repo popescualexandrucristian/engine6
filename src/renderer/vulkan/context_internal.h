@@ -2,6 +2,7 @@
 #include <vulkan/vulkan.h>
 #include <context.h>
 #include <swapchain.h>
+#include <stdio.h>
 
 struct renderer_context
 {

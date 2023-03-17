@@ -36,6 +36,8 @@ set(MAIN_RENDERER
 		src/renderer/vulkan/swapchain.h
 		src/renderer/vulkan/context.cpp
 		src/renderer/vulkan/swapchain.cpp
+		src/renderer/vulkan/program.h
+		src/renderer/vulkan/program.cpp
 	)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan")
 source_group(renderer FILES ${MAIN_RENDERER})

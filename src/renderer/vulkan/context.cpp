@@ -4,6 +4,7 @@
 #include <vector>
 #include <log.h>
 #include <swapchain.h>
+#include <program.h>
 
 static bool register_debug_callback(renderer_context* context)
 {
@@ -62,7 +63,6 @@ static bool create_instance(renderer_context* context)
 	VK_CHECK(vkCreateInstance(&instance_create_info, context->host_allocator, &context->instance), context);
 
 	return context->instance != VK_NULL_HANDLE;
-
 }
 
 static uint32_t get_graphics_family_index(VkPhysicalDevice physical_device)
@@ -163,7 +163,7 @@ static bool create_logical_device(renderer_context* context)
 
 	VkPhysicalDeviceVulkan11Features features11 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	features11.storageBuffer16BitAccess = true;
-	//features11.shaderDrawParameters = true;
+	features11.shaderDrawParameters = true;
 
 	VkPhysicalDeviceVulkan12Features features12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	features12.drawIndirectCount = true;
@@ -260,6 +260,54 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync)
 	if (!out->swapchain)
 		goto ERROR;
 
+	{
+		//todo(alex): remove this garbage
+		shader* vertex_shader = nullptr;
+		{
+			FILE* shader_bytes = fopen("./shaders/tutorial_mesh_with_texture.shader.vert.spv", "rb");
+			fseek(shader_bytes, 0, SEEK_END);
+			long shader_size = ftell(shader_bytes);
+			fseek(shader_bytes, 0, SEEK_SET);
+			uint32_t* shader_data = new uint32_t[shader_size];
+			fread(shader_data, sizeof(uint32_t), shader_size / sizeof(uint32_t), shader_bytes);
+			fclose(shader_bytes);
+			vertex_shader = shader_init(out, shader_data, shader_size / sizeof(uint32_t));
+		}
+		shader* fragment_shader = nullptr;
+		{
+			FILE* shader_bytes = fopen("./shaders/tutorial_mesh_with_texture.shader.frag.spv", "rb");
+			fseek(shader_bytes, 0, SEEK_END);
+			long shader_size = ftell(shader_bytes);
+			fseek(shader_bytes, 0, SEEK_SET);
+			uint32_t* shader_data = new uint32_t[shader_size];
+			fread(shader_data, sizeof(uint32_t), shader_size / sizeof(uint32_t), shader_bytes);
+			fclose(shader_bytes);
+			fragment_shader = shader_init(out, shader_data, shader_size / sizeof(uint32_t));
+		}
+
+		struct vertex
+		{
+			float position[3];
+			float normal[3];
+			float color[3];
+			float uv[2];
+		};
+
+		input_attribute_data vertex_shader_input_attributes{};
+		vertex_shader_input_attributes.binding = 0;
+		vertex_shader_input_attributes.input_rate = VK_VERTEX_INPUT_RATE_VERTEX;
+		vertex_shader_input_attributes.offsets = { offsetof(vertex, position), offsetof(vertex, normal), offsetof(vertex, color), offsetof(vertex, uv)};
+		vertex_shader_input_attributes.locations = { 0,1,2,3 };
+		vertex_shader_input_attributes.stride = sizeof(vertex);
+
+		graphics_program* program = graphics_program_init(out, { vertex_shader, fragment_shader }, { vertex_shader_input_attributes }, 0, true, true);
+
+		shader_destroy(out, fragment_shader);
+		shader_destroy(out, vertex_shader);
+		graphics_program_destroy(out, program);
+		int u = 0;
+		(void)u, program;
+	}
 	return out;
 
 ERROR:
