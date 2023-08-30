@@ -362,7 +362,7 @@ bool renderer_resize(renderer_context* context, uint32_t width, uint32_t height,
 {
 	if (swapchian_update(context->swapchain, context, width, height, use_vsync, use_depth))
 	{
-		assert(context->swapchain->images.size() != context->frame_syncs.size());
+		assert(context->swapchain->images.size() == context->frame_syncs.size());
 		return true;
 	}
 	return false;
@@ -441,7 +441,7 @@ void renderer_update(renderer_context* context, double delta_time)
 	vkCmdEndRendering(command_buffer);
 
 	VkImageMemoryBarrier2 present_barreir = image_barrier(context->swapchain->images[current_frame],
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS);
 
