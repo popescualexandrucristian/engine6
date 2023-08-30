@@ -3,6 +3,17 @@
 #include <context.h>
 #include <swapchain.h>
 #include <stdio.h>
+#include <utils.h>
+
+struct shader;
+struct graphics_program;
+
+struct frame_sync
+{
+	VkFence render_fence;
+	VkSemaphore render_semaphore;
+	VkSemaphore present_semaphore;
+};
 
 struct renderer_context
 {
@@ -15,7 +26,22 @@ struct renderer_context
 	VkDevice logical_device;
 	VkSurfaceKHR surface;
 	VkFormat swapchain_format;
+	VkFormat depth_format;
 	swapchain* swapchain;
+	VmaAllocator gpu_allocator;
+
+	std::vector<frame_sync> frame_syncs;
+	size_t max_frames;
+	size_t current_frame;
+
+	VkQueue graphics_queue;
+
+	//alex(todo) : remove this garbage.
+	shader* vertex_shader;
+	shader* fragment_shader;
+	graphics_program* program;
+	std::vector<VkCommandPool> commands_pools;
+	std::vector<VkDescriptorPool> descriptor_pools;
 };
 
 #define VK_CHECK(x, c)											\

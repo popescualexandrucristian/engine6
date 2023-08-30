@@ -4,14 +4,6 @@
 #include <algorithm>
 #include <vector>
 
-struct swapchain
-{
-	VkSwapchainKHR swapchain;
-	std::vector<VkImage> images;
-	uint32_t width, height;
-	bool vsync;
-};
-
 static VkPresentModeKHR get_present_mode(renderer_context* context, bool vsync)
 {
 	uint32_t num_present_modes = 0;
@@ -51,7 +43,7 @@ static VkSwapchainKHR create_swapchain(renderer_context* context, VkSurfaceCapab
 	create_info.imageExtent.width = width;
 	create_info.imageExtent.height = height;
 	create_info.imageArrayLayers = 1;
-	create_info.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	create_info.queueFamilyIndexCount = 1;
 	create_info.pQueueFamilyIndices = &context->graphics_family_index;
 	create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
@@ -66,7 +58,56 @@ static VkSwapchainKHR create_swapchain(renderer_context* context, VkSurfaceCapab
 	return swapchain;
 }
 
-swapchain* swapchain_init(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync)
+
+static void destroy_image_views(renderer_context* context, swapchain* swapchain)
+{
+	for (const VkImageView& i : swapchain->views)
+		vkDestroyImageView(context->logical_device, i, context->host_allocator);
+
+	for (const VkImageView& i : swapchain->depth_views)
+		vkDestroyImageView(context->logical_device, i, context->host_allocator);
+
+	swapchain->views.clear();
+	swapchain->depth_views.clear();
+}
+
+static void destroy_depth_images(renderer_context* context, swapchain* swapchain)
+{
+	for (const image_data& i : swapchain->depth_images)
+		image_destroy(context, i);
+}
+
+
+std::vector<VkImageView> create_image_views(renderer_context* context, const std::vector<VkImage>& images)
+{
+
+	std::vector<VkImageView> out;
+	for (uint32_t i = 0; i < images.size(); ++i)
+		out.push_back(image_view_create(context, images[i], context->swapchain_format, 0, 1, VK_IMAGE_ASPECT_COLOR_BIT));
+
+	return out;
+}
+
+std::vector<VkImageView> create_depth_image_views(renderer_context* context, const std::vector<image_data>& images)
+{
+	std::vector<VkImageView> out;
+	for (uint32_t i = 0; i < images.size(); ++i)
+		out.push_back(image_view_create(context, images[i].image, context->depth_format, 0, 1, VK_IMAGE_ASPECT_DEPTH_BIT));
+
+	return out;
+}
+
+std::vector<image_data> create_depth_images(renderer_context* context, swapchain* swapchain, size_t image_count)
+{
+	std::vector<image_data> out;
+	for (size_t i = 0; i < image_count; ++i)
+		out.push_back(image_create(context, swapchain->width, swapchain->height, 1, context->depth_format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE));
+
+	return out;
+}
+
+
+swapchain* swapchain_init(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync, bool use_depth)
 {
 	swapchain* out = new swapchain();
 
@@ -79,15 +120,20 @@ swapchain* swapchain_init(renderer_context* context, uint32_t width, uint32_t he
 	out->width = width;
 	out->height = height;
 	out->vsync = use_vsync;
-
+	
 	uint32_t image_count = 0;
 	VK_CHECK(vkGetSwapchainImagesKHR(context->logical_device, out->swapchain, &image_count, 0), context);
 
 	std::vector<VkImage> images(image_count);
 	VK_CHECK(vkGetSwapchainImagesKHR(context->logical_device, out->swapchain, &image_count, images.data()), context);
 	out->images = std::move(images);
+	out->views = std::move(create_image_views(context, out->images));
 
-	//todo(Alex) : image views for the swapchain
+	if (use_depth)
+	{
+		out->depth_images = std::move(create_depth_images(context, out, out->images.size()));
+		out->depth_views = std::move(create_depth_image_views(context, out->depth_images));
+	}
 
 	return out;
 }
@@ -96,6 +142,9 @@ void swapchian_destroy(swapchain* swapchain, renderer_context* context)
 {
 	if (!swapchain)
 		return;
+
+	destroy_image_views(context, swapchain);
+	destroy_depth_images(context, swapchain);
 
 	if (swapchain->swapchain != VK_NULL_HANDLE)
 	{
@@ -107,7 +156,7 @@ void swapchian_destroy(swapchain* swapchain, renderer_context* context)
 	delete swapchain;
 }
 
-bool swapchian_update(swapchain* swapchain, renderer_context* context, uint32_t new_width, uint32_t new_height, bool use_vsync)
+bool swapchian_update(swapchain* swapchain, renderer_context* context, uint32_t new_width, uint32_t new_height, bool use_vsync, bool use_depth)
 {
 	if (new_width == 0 || new_height == 0)
 		return false;
@@ -140,10 +189,36 @@ bool swapchian_update(swapchain* swapchain, renderer_context* context, uint32_t 
 	VK_CHECK(vkGetSwapchainImagesKHR(context->logical_device, swapchain->swapchain, &image_count, images.data()), context);
 	swapchain->images = std::move(images);
 
+	destroy_image_views(context, swapchain);
+	destroy_depth_images(context, swapchain);
+
+	swapchain->views = create_image_views(context, swapchain->images);
+
+	if (use_depth)
+	{
+		swapchain->depth_images = std::move(create_depth_images(context, swapchain, swapchain->images.size()));
+		swapchain->depth_views = std::move(create_depth_image_views(context, swapchain->depth_images));
+	}
+
 	vkDestroySwapchainKHR(context->logical_device, old_swapchain, context->host_allocator);
 
 	//todo(Alex) : image views for the swapchain
 
 	VK_CHECK(vkDeviceWaitIdle(context->logical_device), context);
 	return true;
+}
+
+uint32_t acquire_next_image(swapchain* swapchain, renderer_context* context, VkFence fence, VkSemaphore semaphore)
+{
+	VkAcquireNextImageInfoKHR vkAcquireNextImageInfoKHR{ VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR };
+	//alex(todo): is this correct, should it be 1 ?
+	vkAcquireNextImageInfoKHR.deviceMask = 1;
+	vkAcquireNextImageInfoKHR.fence = fence;
+	vkAcquireNextImageInfoKHR.semaphore = semaphore;
+	vkAcquireNextImageInfoKHR.swapchain = swapchain->swapchain;
+	vkAcquireNextImageInfoKHR.timeout = ~0uLL;
+	uint32_t out = 0u;
+	VK_CHECK(vkAcquireNextImage2KHR(context->logical_device, &vkAcquireNextImageInfoKHR, &out), context);
+
+	return out;
 }

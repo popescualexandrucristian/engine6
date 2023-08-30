@@ -13,6 +13,7 @@ constexpr double update_rate{ 1.0 / 60.0 };
 constexpr uint32_t initial_width = 800;
 constexpr uint32_t initial_height = 600;
 constexpr bool use_vsync = true;
+constexpr bool use_depth = true;
 
 static HWND window_handle = NULL;
 
@@ -234,7 +235,7 @@ LRESULT WINAPI window_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return 0;
 		RECT client_rect{};
 		GetClientRect(hWnd, &client_rect);
-		renderer_resize(render_context, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top, use_vsync);
+		renderer_resize(render_context, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top, use_vsync, use_depth);
 		return 0;
 	}
 
@@ -333,7 +334,7 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	UpdateWindow(h_wnd);
 	window_handle = h_wnd;
 
-	render_context = renderer_init(initial_width, initial_height, use_vsync);
+	render_context = renderer_init(initial_width, initial_height, use_vsync, use_depth);
 	if (!render_context)
 	{
 		MessageBox(NULL, "cannot initialize the rendering context.", "error", MB_OK);

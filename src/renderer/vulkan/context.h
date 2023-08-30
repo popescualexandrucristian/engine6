@@ -3,9 +3,9 @@
 
 struct renderer_context;
 
-renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync);
+renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync, bool use_depth);
 
-bool renderer_resize(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync);
+bool renderer_resize(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync, bool use_depth);
 
 void renderer_update(renderer_context*, double);
 

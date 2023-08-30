@@ -6,6 +6,18 @@
 #include <swapchain.h>
 #include <program.h>
 
+#define VMA_STATIC_VULKAN_FUNCTIONS 1
+#define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
+#define VMA_IMPLEMENTATION
+#pragma warning( push )
+#pragma warning( disable : 4100 )
+#pragma warning( disable : 4127 )
+#pragma warning( disable : 4189 )
+#include <vma/vk_mem_alloc.h>
+#pragma warning( pop )
+
+
+
 static bool register_debug_callback(renderer_context* context)
 {
 	VkDebugReportCallbackCreateInfoEXT create_info = { VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT };
@@ -195,9 +207,28 @@ static bool create_logical_device(renderer_context* context)
 	return context->logical_device != VK_NULL_HANDLE;
 }
 
+VkFormat select_format_from_available(renderer_context* context, const std::initializer_list<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
+	for (VkFormat format : candidates) {
+		VkFormatProperties props;
+		vkGetPhysicalDeviceFormatProperties(context->physical_device, format, &props);
+
+		if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+			return format;
+		}
+		else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+			return format;
+		}
+	}
+
+	return VK_FORMAT_UNDEFINED;
+}
+
 
 static bool select_swapchain_format(renderer_context* context)
 {
+	context->swapchain_format = VK_FORMAT_UNDEFINED;
+	context->depth_format = VK_FORMAT_UNDEFINED;
+
 	uint32_t format_count = 0;
 	VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(context->physical_device, context->surface, &format_count, 0), context);
 	if (format_count == 0)
@@ -209,21 +240,52 @@ static bool select_swapchain_format(renderer_context* context)
 	if (format_count == 1 && formats[0].format == VK_FORMAT_UNDEFINED)
 	{
 		context->swapchain_format = VK_FORMAT_R8G8B8A8_UNORM;
-		return true;
+	}
+	else
+	{
+		for (uint32_t i = 0; i < format_count; ++i)
+			if (formats[i].format == VK_FORMAT_R8G8B8A8_UNORM || formats[i].format == VK_FORMAT_B8G8R8A8_UNORM)
+			{
+				context->swapchain_format = formats[i].format;
+			}
 	}
 
-	for (uint32_t i = 0; i < format_count; ++i)
-		if (formats[i].format == VK_FORMAT_R8G8B8A8_UNORM || formats[i].format == VK_FORMAT_B8G8R8A8_UNORM)
-		{
-			context->swapchain_format = formats[i].format;
-			return true;
-		}
+	if (context->swapchain_format == VK_FORMAT_UNDEFINED)
+		context->swapchain_format = formats[0].format;
 
-	context->swapchain_format = formats[0].format;
+	context->depth_format = select_format_from_available(context, { VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
 	return true;
 }
 
-renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync)
+static void create_frame_sync_data(renderer_context* context)
+{
+	context->frame_syncs.clear();
+	for (size_t i = 0; i < context->swapchain->images.size(); ++i)
+	{
+		frame_sync sync{};
+		sync.present_semaphore = semaphore_create(context);
+		sync.render_semaphore = semaphore_create(context);
+		sync.render_fence = fence_create(context, true);
+
+		context->frame_syncs.emplace_back(std::move(sync));
+	}
+}
+
+static void destroy_frame_sync_data(renderer_context* context)
+{
+	for (size_t i = 0; i < context->frame_syncs.size(); ++i)
+	{
+		semaphore_destroy(context, context->frame_syncs[i].present_semaphore);
+		semaphore_destroy(context, context->frame_syncs[i].render_semaphore);
+		fence_destroy(context, context->frame_syncs[i].render_fence);
+	}
+	context->frame_syncs.clear();
+}
+
+renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync, bool use_depth)
 {
 	renderer_context* out = new renderer_context();
 	out->debug_callback = get_renderer_debug_callback();
@@ -242,6 +304,8 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync)
 	if (!create_logical_device(out))
 		goto ERROR;
 
+	vkGetDeviceQueue(out->logical_device, out->graphics_family_index, 0, &out->graphics_queue);
+
 	out->surface = create_renderer_surface(out->instance);
 	if (out->surface == VK_NULL_HANDLE)
 		goto ERROR;
@@ -256,57 +320,36 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync)
 	if (!select_swapchain_format(out))
 		goto ERROR;
 
-	out->swapchain = swapchain_init(out, width, height, use_vsync);
+	{
+		VmaAllocatorCreateInfo info = {};
+		info.vulkanApiVersion = VK_API_VERSION_1_3;
+		info.physicalDevice = out->physical_device;
+		info.device = out->logical_device;
+		info.instance = out->instance;
+		out->gpu_allocator = {};
+		VK_CHECK(vmaCreateAllocator(&info, &out->gpu_allocator), out);
+	}
+
+	out->swapchain = swapchain_init(out, width, height, use_vsync, use_depth);
 	if (!out->swapchain)
 		goto ERROR;
 
+	create_frame_sync_data(out);
+	out->current_frame = 0;
+	out->max_frames = out->frame_syncs.size();
+
+	
 	{
 		//todo(alex): remove this garbage
-		shader* vertex_shader = nullptr;
+		out->vertex_shader = shader_init(out, "./shaders/tutorial.shader.vert.spv");
+		out->fragment_shader = shader_init(out, "./shaders/tutorial.shader.frag.spv");
+		out->program = graphics_program_init(out, { out->vertex_shader, out->fragment_shader }, {}, 0, true, true, true);
+
+		for (size_t i = 0; i < out->frame_syncs.size(); ++i)
 		{
-			FILE* shader_bytes = fopen("./shaders/tutorial_mesh_with_texture.shader.vert.spv", "rb");
-			fseek(shader_bytes, 0, SEEK_END);
-			long shader_size = ftell(shader_bytes);
-			fseek(shader_bytes, 0, SEEK_SET);
-			uint32_t* shader_data = new uint32_t[shader_size];
-			fread(shader_data, sizeof(uint32_t), shader_size / sizeof(uint32_t), shader_bytes);
-			fclose(shader_bytes);
-			vertex_shader = shader_init(out, shader_data, shader_size / sizeof(uint32_t));
+			out->commands_pools.push_back(commands_pool_crate(out));
+			out->descriptor_pools.push_back(descriptor_pool_create(out, 128));
 		}
-		shader* fragment_shader = nullptr;
-		{
-			FILE* shader_bytes = fopen("./shaders/tutorial_mesh_with_texture.shader.frag.spv", "rb");
-			fseek(shader_bytes, 0, SEEK_END);
-			long shader_size = ftell(shader_bytes);
-			fseek(shader_bytes, 0, SEEK_SET);
-			uint32_t* shader_data = new uint32_t[shader_size];
-			fread(shader_data, sizeof(uint32_t), shader_size / sizeof(uint32_t), shader_bytes);
-			fclose(shader_bytes);
-			fragment_shader = shader_init(out, shader_data, shader_size / sizeof(uint32_t));
-		}
-
-		struct vertex
-		{
-			float position[3];
-			float normal[3];
-			float color[3];
-			float uv[2];
-		};
-
-		input_attribute_data vertex_shader_input_attributes{};
-		vertex_shader_input_attributes.binding = 0;
-		vertex_shader_input_attributes.input_rate = VK_VERTEX_INPUT_RATE_VERTEX;
-		vertex_shader_input_attributes.offsets = { offsetof(vertex, position), offsetof(vertex, normal), offsetof(vertex, color), offsetof(vertex, uv)};
-		vertex_shader_input_attributes.locations = { 0,1,2,3 };
-		vertex_shader_input_attributes.stride = sizeof(vertex);
-
-		graphics_program* program = graphics_program_init(out, { vertex_shader, fragment_shader }, { vertex_shader_input_attributes }, 0, true, true);
-
-		shader_destroy(out, fragment_shader);
-		shader_destroy(out, vertex_shader);
-		graphics_program_destroy(out, program);
-		int u = 0;
-		(void)u, program;
 	}
 	return out;
 
@@ -315,19 +358,134 @@ ERROR:
 	return nullptr;
 }
 
-bool renderer_resize(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync)
+bool renderer_resize(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync, bool use_depth)
 {
-	return swapchian_update(context->swapchain, context, width, height, use_vsync);
+	if (swapchian_update(context->swapchain, context, width, height, use_vsync, use_depth))
+	{
+		assert(context->swapchain->images.size() != context->frame_syncs.size());
+		return true;
+	}
+	return false;
 }
 
 void renderer_update(renderer_context* context, double delta_time)
 {
-	//todo(Alex) : next
-	//renderpass + framebuffers(let's see if we can skip this in 1.3)
-	//pipelines
-	// commands
-	//clear screen
-	(void)context, delta_time;
+	(void)delta_time;
+
+
+	size_t current_frame = context->current_frame % context->max_frames;
+	frame_sync& sync = context->frame_syncs[current_frame];
+
+	//aquire free image
+	VK_CHECK(vkWaitForFences(context->logical_device, 1, &sync.render_fence, true, 1000000000),context);
+	VK_CHECK(vkResetFences(context->logical_device, 1, &sync.render_fence), context);
+
+
+	uint32_t next_image_index = acquire_next_image(context->swapchain, context, VK_NULL_HANDLE, sync.present_semaphore);
+
+	VK_CHECK(vkResetCommandPool(context->logical_device, context->commands_pools[current_frame], 0), context);
+
+	VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+	VkCommandBufferAllocateInfo command_allocate{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+	command_allocate.commandPool = context->commands_pools[current_frame];
+	command_allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	command_allocate.commandBufferCount = 1;
+
+	VK_CHECK(vkAllocateCommandBuffers(context->logical_device, &command_allocate, &command_buffer), context);
+
+	VkCommandBufferBeginInfo command_begin{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	command_begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	VK_CHECK(vkBeginCommandBuffer(command_buffer, &command_begin), context);
+
+	VkRenderingAttachmentInfo color_attachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+	color_attachment.imageView = context->swapchain->views[next_image_index];
+	color_attachment.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+	color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+	VkClearValue clear_color{};
+	clear_color.color.float32[0] = 1.0f;
+	clear_color.color.float32[0] = 0.0f;
+	clear_color.color.float32[0] = 0.0f;
+	clear_color.color.float32[0] = 1.0f;
+	color_attachment.clearValue = clear_color;
+
+	VkRenderingAttachmentInfo depth_attachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+	depth_attachment.imageView = context->swapchain->depth_views[next_image_index];;
+	depth_attachment.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+	depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+	VkClearValue clear_depth{};
+	clear_depth.depthStencil.depth = 1.0f;
+	depth_attachment.clearValue = clear_depth;
+
+	VkRenderingInfo pass_info = { VK_STRUCTURE_TYPE_RENDERING_INFO };
+	pass_info.renderArea.extent.width = context->swapchain->width;
+	pass_info.renderArea.extent.height = context->swapchain->height;
+	pass_info.layerCount = 1;
+	pass_info.colorAttachmentCount = 1;
+	pass_info.pColorAttachments = &color_attachment;
+	pass_info.pDepthAttachment = &depth_attachment;
+
+	vkCmdBeginRendering(command_buffer, &pass_info);
+
+	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, context->program->pipeline);
+
+	VkViewport viewport = { 0, float(context->swapchain->height), float(context->swapchain->width), -float(context->swapchain->height), 0, 1 };
+	VkRect2D scissor = { {0, 0}, {uint32_t(context->swapchain->width), uint32_t(context->swapchain->height)} };
+
+	vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+	vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+	vkCmdEndRendering(command_buffer);
+
+	VkImageMemoryBarrier2 present_barreir = image_barrier(context->swapchain->images[current_frame],
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 
+		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS);
+
+	push_pipeline_barrier(command_buffer, 0, 0, nullptr, 1, &present_barreir);
+
+	VK_CHECK(vkEndCommandBuffer(command_buffer), context);
+
+	//submit
+
+	VkSubmitInfo submit = {};
+	submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submit.pNext = nullptr;
+
+	VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+	submit.pWaitDstStageMask = &waitStage;
+
+	submit.waitSemaphoreCount = 1;
+	submit.pWaitSemaphores = &sync.present_semaphore;
+
+	submit.signalSemaphoreCount = 1;
+	submit.pSignalSemaphores = &sync.render_semaphore;
+
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &command_buffer;
+
+	VK_CHECK(vkQueueSubmit(context->graphics_queue, 1, &submit, sync.render_fence), context);
+
+	//present
+
+	VkPresentInfoKHR present_info = {};
+	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	present_info.pNext = nullptr;
+
+	present_info.pSwapchains = &context->swapchain->swapchain;
+	present_info.swapchainCount = 1;
+
+	present_info.pWaitSemaphores = &sync.render_semaphore;
+	present_info.waitSemaphoreCount = 1;
+
+	present_info.pImageIndices = &next_image_index;
+
+	context->current_frame++;
+	VK_CHECK(vkQueuePresentKHR(context->graphics_queue, &present_info), context);
 }
 
 void renderer_shutdown(renderer_context* context)
@@ -336,6 +494,23 @@ void renderer_shutdown(renderer_context* context)
 	{
 		if (context->logical_device)
 			VK_CHECK(vkDeviceWaitIdle(context->logical_device), context);
+
+		{
+			//todo(alex): remove this garbage
+			for (int i = 0; i < context->descriptor_pools.size(); ++i)
+				descriptor_pool_destroy(context, context->descriptor_pools[i]);
+			context->descriptor_pools.clear();
+
+			for (int i = 0; i < context->commands_pools.size(); ++i)
+				commands_pool_destroy(context, context->commands_pools[i]);
+			context->commands_pools.clear();
+
+			graphics_program_destroy(context, context->program);
+			shader_destroy(context, context->fragment_shader);
+			shader_destroy(context, context->vertex_shader);
+		}
+
+		destroy_frame_sync_data(context);
 
 		if (context->swapchain)
 		{
@@ -347,6 +522,13 @@ void renderer_shutdown(renderer_context* context)
 			destroy_renderer_surface(context->surface, context->instance);
 			context->surface = VK_NULL_HANDLE;
 		}
+
+		if (context->gpu_allocator)
+		{
+			vmaDestroyAllocator(context->gpu_allocator);
+			context->gpu_allocator = nullptr;
+		}
+
 		if (context->logical_device)
 		{
 			vkDestroyDevice(context->logical_device, context->host_allocator);

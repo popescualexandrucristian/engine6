@@ -7,62 +7,6 @@
 
 #include <spirv-headers/spirv.h>
 
-struct shader
-{
-    VkShaderStageFlagBits type;
-    VkShaderModule module;
-    bool uses_constants;
-    struct meta
-    {
-        enum class type {
-            void_type,
-            bool_type,
-            int_type,
-            uint_type,
-            float_type,
-            double_type,
-            bvec2_type,
-            ivec2_type,
-            uvec2_type,
-            vec2_type,
-            dvec2_type,
-            bvec3_type,
-            ivec3_type,
-            uvec3_type,
-            vec3_type,
-            dvec3_type,
-            bvec4_type,
-            ivec4_type,
-            uvec4_type,
-            vec4_type,
-            dvec4_type,
-            types_count
-        };
-        struct binding
-        {
-            VkDescriptorType resource_type;
-            uint32_t binding;
-            uint32_t set;
-        };
-        struct attribute
-        {
-            shader::meta::type field_type;
-            uint32_t location;
-        };
-
-        uint32_t group_size_x;
-        uint32_t group_size_y;
-        uint32_t group_size_z;
-        int32_t group_size_x_id = -1;
-        int32_t group_size_y_id = -1;
-        int32_t group_size_z_id = -1;
-        std::vector<binding> resource_bindings;
-        std::string entry_point;
-        std::vector<attribute> inputs;
-        std::vector<attribute> outputs;
-    } metadata;
-};
-
 struct shader_id
 {
     uint32_t opcode;
@@ -642,6 +586,20 @@ shader* shader_init(renderer_context* context, const uint32_t* const data, size_
     return out;
 }
 
+shader* shader_init(renderer_context* context, const char* path)
+{
+    FILE* shader_bytes = fopen(path, "rb");
+    fseek(shader_bytes, 0, SEEK_END);
+    long shader_size = ftell(shader_bytes);
+    fseek(shader_bytes, 0, SEEK_SET);
+    uint32_t* shader_data = new uint32_t[shader_size];
+    fread(shader_data, sizeof(uint32_t), shader_size / sizeof(uint32_t), shader_bytes);
+    fclose(shader_bytes);
+    shader* out = shader_init(context, shader_data, shader_size / sizeof(uint32_t));
+    delete shader_data;
+    return out;
+}
+
 void shader_destroy(renderer_context* context, shader* shader)
 {
     if(!shader)
@@ -656,14 +614,121 @@ void shader_destroy(renderer_context* context, shader* shader)
     delete shader;
 }
 
-struct graphics_program
+std::vector<VkDescriptorSetLayout> createDescriptorLayoutsAssumeSharedSets(renderer_context* context, shaders shaders)
 {
-    VkPipelineLayout pipeline_layout;
-    VkPipeline pipeline;
-    std::vector<VkDescriptorSetLayout> descriptor_layouts;
-};
+    std::vector<VkDescriptorSetLayout> out;
+    std::map<uint32_t, uint32_t> set_ids_to_num_bindings;
+    for (const shader* const shader : shaders)
+    {
+        for (auto& binding : shader->metadata.resource_bindings)
+        {
+            set_ids_to_num_bindings[binding.set] += 1;
+        }
+    }
 
-graphics_program* graphics_program_init(renderer_context* context, shaders shaders, input_attributes vertex_input_attributes, size_t push_constant_size, bool use_depth, bool write_to_depth)
+    for (const auto& current_set_id : set_ids_to_num_bindings)
+    {
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        for (const shader* const shader : shaders)
+        {
+            for (auto& binding : shader->metadata.resource_bindings)
+            {
+                if (binding.set != current_set_id.first)
+                    continue;
+
+                VkDescriptorSetLayoutBinding* currentBinding = nullptr;
+                auto sameBinding = std::find_if(begin(bindings), end(bindings), [&binding](const VkDescriptorSetLayoutBinding oldBinding) {return oldBinding.binding == binding.binding; });
+                if (sameBinding == bindings.end())
+                {
+                    VkDescriptorSetLayoutBinding new_binding{};
+                    new_binding.binding = binding.binding;
+                    new_binding.descriptorType = binding.resource_type;
+                    new_binding.stageFlags = shader->type;
+                    new_binding.descriptorCount = 1;// todo(alex) : parse this in the shader.
+                    bindings.emplace_back(std::move(new_binding));
+                    currentBinding = &bindings[bindings.size() - 1];
+                }
+                else
+                    currentBinding = &*sameBinding;
+
+                if (!currentBinding)
+                    return out;
+
+                currentBinding->stageFlags |= shader->type;
+
+                //todo(alex) : set the descriptor count to the highest value of the bindings.
+
+                if (currentBinding->descriptorType != binding.resource_type)
+                    return out;
+            }
+        }
+
+        VkDescriptorSetLayoutCreateInfo decriptor_layout_create_info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+        decriptor_layout_create_info.pBindings = bindings.data();
+        decriptor_layout_create_info.bindingCount = uint32_t(bindings.size());
+
+        VkDescriptorSetLayout descriptor_layout = VK_NULL_HANDLE;
+        vkCreateDescriptorSetLayout(context->logical_device, &decriptor_layout_create_info, context->host_allocator, &descriptor_layout);
+        if (descriptor_layout == VK_NULL_HANDLE)
+        {
+            for (VkDescriptorSetLayout l : out)
+                vkDestroyDescriptorSetLayout(context->logical_device, l, context->host_allocator);
+            out.clear();
+            return out;
+        }
+        out.push_back(descriptor_layout);
+    }
+
+    return out;
+}
+
+std::vector<VkDescriptorSetLayout> createDescriptorLayoutsNoSharedSets(renderer_context* context, shaders shaders)
+{
+    std::vector<VkDescriptorSetLayout> descriptor_layouts;
+    for (const shader* const shader : shaders)
+    {
+        std::map<uint32_t, uint32_t> set_ids_to_num_bindings;
+        for (auto& binding : shader->metadata.resource_bindings)
+        {
+            set_ids_to_num_bindings[binding.set] += 1;
+        }
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        for (const auto& id_to_count : set_ids_to_num_bindings)
+        {
+            bindings.clear();
+            for (auto& binding : shader->metadata.resource_bindings)
+            {
+                if (binding.set == id_to_count.first)
+                {
+                    VkDescriptorSetLayoutBinding new_binding{};
+                    new_binding.binding = binding.binding;
+                    new_binding.descriptorType = binding.resource_type;
+                    new_binding.stageFlags = shader->type;
+                    new_binding.descriptorCount = 1;// todo(alex) : parse this in the shader
+                    bindings.emplace_back(std::move(new_binding));
+                }
+            }
+
+            VkDescriptorSetLayoutCreateInfo decriptor_layout_create_info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+            decriptor_layout_create_info.pBindings = bindings.data();
+            decriptor_layout_create_info.bindingCount = uint32_t(bindings.size());
+
+            VkDescriptorSetLayout descriptor_layout = VK_NULL_HANDLE;
+            vkCreateDescriptorSetLayout(context->logical_device, &decriptor_layout_create_info, context->host_allocator, &descriptor_layout);
+            if (descriptor_layout == VK_NULL_HANDLE)
+            {
+                for (VkDescriptorSetLayout l : descriptor_layouts)
+                    vkDestroyDescriptorSetLayout(context->logical_device, l, context->host_allocator);
+                descriptor_layouts.clear();
+                return descriptor_layouts;
+            }
+            descriptor_layouts.push_back(descriptor_layout);
+        }
+    }
+    return descriptor_layouts;
+}
+
+graphics_program* graphics_program_init(renderer_context* context, shaders shaders, input_attributes vertex_input_attributes, size_t push_constant_size, bool use_depth, bool write_to_depth, bool sharedDescriptorSets)
 {
     VkGraphicsPipelineCreateInfo create_info{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     create_info.stageCount = uint32_t(shaders.size());
@@ -796,6 +861,7 @@ graphics_program* graphics_program_init(renderer_context* context, shaders shade
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
     input_assembly_create_info.primitiveRestartEnable = false;
+    //todo(alex): add an option to support other primitive topology types.
     input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     create_info.pInputAssemblyState = &input_assembly_create_info;
 
@@ -850,48 +916,10 @@ graphics_program* graphics_program_init(renderer_context* context, shaders shade
 
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VkPipelineLayoutCreateInfo layout_create_info { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };    
-    std::vector<VkDescriptorSetLayout> descriptor_layouts;
-    //todo(alex) : we should create the smallest number of descriptors as such we should consider all the sets for all the shaders
-    for (const shader* const shader : shaders)
-    {
-        std::map<uint32_t, uint32_t> set_ids_to_num_bindings;
-        for (auto& binding : shader->metadata.resource_bindings)
-        {
-            set_ids_to_num_bindings[binding.set] += 1;
-        }
-        std::vector<VkDescriptorSetLayoutBinding> bindings;
-        for (const auto& id_to_count : set_ids_to_num_bindings)
-        {
-            bindings.clear();
-            for (auto& binding : shader->metadata.resource_bindings)
-            {
-                if (binding.set == id_to_count.first)
-                {
-                    VkDescriptorSetLayoutBinding new_binding{};
-                    new_binding.binding = binding.binding;
-                    new_binding.descriptorType = binding.resource_type;
-                    new_binding.stageFlags = shader->type;
-                    new_binding.descriptorCount = 1;// todo(alex) : parse this in the shader
-                    bindings.emplace_back(std::move(new_binding));
-                }
-            }
-
-            VkDescriptorSetLayoutCreateInfo decriptor_layout_create_info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-            decriptor_layout_create_info.pBindings = bindings.data();
-            decriptor_layout_create_info.bindingCount = uint32_t(bindings.size());
-
-            VkDescriptorSetLayout descriptor_layout = VK_NULL_HANDLE;
-            vkCreateDescriptorSetLayout(context->logical_device, &decriptor_layout_create_info, context->host_allocator, &descriptor_layout);
-            if (descriptor_layout == VK_NULL_HANDLE)
-            {
-                for (VkDescriptorSetLayout l : descriptor_layouts)
-                    vkDestroyDescriptorSetLayout(context->logical_device, l, context->host_allocator);
-                descriptor_layouts.clear();
-                return nullptr;
-            }
-            descriptor_layouts.push_back(descriptor_layout);
-        }
-    }
+    
+    const std::vector<VkDescriptorSetLayout> descriptor_layouts =
+        sharedDescriptorSets ? createDescriptorLayoutsAssumeSharedSets(context, shaders) :
+        createDescriptorLayoutsNoSharedSets(context, shaders);
 
     layout_create_info.pSetLayouts = descriptor_layouts.data();
     layout_create_info.setLayoutCount = uint32_t(descriptor_layouts.size());
