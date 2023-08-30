@@ -175,3 +175,60 @@ void push_pipeline_barrier(VkCommandBuffer commandBuffer, VkDependencyFlags depe
 
 	vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
 }
+
+//alex(todo): this is suboptimal as fuck but it will do for now, should upload data properly.
+buffer_data upload_mesh(renderer_context* context, void* verts, uint32_t num_vertices, uint32_t one_vertex_size)
+{
+	buffer_data staging_buffer{};
+	{
+		VkBufferCreateInfo buffer_info = {};
+		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		buffer_info.size = num_vertices * one_vertex_size;
+		buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+		VmaAllocationCreateInfo vmaalloc_info = {};
+		vmaalloc_info.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+
+		VK_CHECK(vmaCreateBuffer(context->gpu_allocator, &buffer_info, &vmaalloc_info,
+			&staging_buffer.buffer,
+			&staging_buffer.allocation,
+			nullptr), context);
+	}
+
+	void* data = nullptr;
+	vmaMapMemory(context->gpu_allocator, staging_buffer.allocation, &data);
+	{
+		memcpy(data, verts, num_vertices * one_vertex_size);
+	}
+	vmaUnmapMemory(context->gpu_allocator, staging_buffer.allocation);
+
+	//mesh on gpu buffer
+	buffer_data out;
+	{
+		VkBufferCreateInfo buffer_info = {};
+		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		buffer_info.size = num_vertices * one_vertex_size;
+		buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+		VmaAllocationCreateInfo vmaalloc_info = {};
+		vmaalloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+		VK_CHECK(vmaCreateBuffer(context->gpu_allocator, &buffer_info, &vmaalloc_info,
+			&out.buffer,
+			&out.allocation,
+			nullptr), context);
+	}
+
+	immediate_submit(context, [&staging_buffer, out, num_vertices, one_vertex_size](VkCommandBuffer cmd) {
+		VkBufferCopy copy{};
+		copy.dstOffset = 0;
+		copy.srcOffset = 0;
+		copy.size = num_vertices * one_vertex_size;
+		vkCmdCopyBuffer(cmd, staging_buffer.buffer, out.buffer, 1, &copy);
+		}
+	);
+
+	vmaDestroyBuffer(context->gpu_allocator, staging_buffer.buffer, staging_buffer.allocation);
+
+	return out;
+}

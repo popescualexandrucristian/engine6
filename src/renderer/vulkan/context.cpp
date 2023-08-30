@@ -338,18 +338,37 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync,
 	out->current_frame = 0;
 	out->max_frames = out->frame_syncs.size();
 
+	out->imediate_commands_pools.push_back(commands_pool_crate(out));
+	out->imediate_commands_fences.push_back(fence_create(out, false));
 	
 	{
 		//todo(alex): remove this garbage
-		out->vertex_shader = shader_init(out, "./shaders/tutorial.shader.vert.spv");
-		out->fragment_shader = shader_init(out, "./shaders/tutorial.shader.frag.spv");
-		out->program = graphics_program_init(out, { out->vertex_shader, out->fragment_shader }, {}, 0, true, true, true, 1, &out->swapchain_format, out->depth_format, VK_FORMAT_UNDEFINED);
+		out->vertex_shader = shader_init(out, "./shaders/from_buffers.vert.spv");
+		out->fragment_shader = shader_init(out, "./shaders/from_buffers.frag.spv");
+
+
+		input_attribute_data vertex_shader_input_attributes{};
+		vertex_shader_input_attributes.binding = 0;
+		vertex_shader_input_attributes.input_rate = VK_VERTEX_INPUT_RATE_VERTEX;
+		vertex_shader_input_attributes.offsets = { offsetof(renderer_context::vertex, position), offsetof(renderer_context::vertex, color)};
+		vertex_shader_input_attributes.locations = { 0, 1 };
+		vertex_shader_input_attributes.stride = sizeof(renderer_context::vertex);
+
+		out->program = graphics_program_init(out, { out->vertex_shader, out->fragment_shader }, {vertex_shader_input_attributes}, 0, true, true, true, 1, &out->swapchain_format, out->depth_format, VK_FORMAT_UNDEFINED);
 
 		for (size_t i = 0; i < out->frame_syncs.size(); ++i)
 		{
 			out->commands_pools.push_back(commands_pool_crate(out));
 			out->descriptor_pools.push_back(descriptor_pool_create(out, 128));
 		}
+
+		renderer_context::vertex verts_data[3] = {
+			{{-0.5,  0.5, 0.0},0.0,{1.0, 0.0, 0.0}},
+			{{ 0.5,  0.5, 0.0},0.0,{0.0, 1.0, 0.0}},
+			{{ 0.0, -0.5, 0.0},0.0,{0.0, 0.0, 1.0}}
+		};
+
+		out->vertex_data = upload_mesh(out, verts_data, 3, sizeof(renderer_context::vertex));
 	}
 	return out;
 
@@ -435,10 +454,12 @@ void renderer_update(renderer_context* context, double delta_time)
 
 	push_pipeline_barrier(command_buffer, 0, 0, nullptr, 1, &depth_barreir);
 
-
 	vkCmdBeginRendering(command_buffer, &pass_info);
 
 	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, context->program->pipeline);
+
+	VkDeviceSize offset = 0;
+	vkCmdBindVertexBuffers(command_buffer, 0, 1, &context->vertex_data.buffer, &offset);
 
 	VkViewport viewport = { 0, float(context->swapchain->height), float(context->swapchain->width), -float(context->swapchain->height), 0, 1 };
 	VkRect2D scissor = { {0, 0}, {uint32_t(context->swapchain->width), uint32_t(context->swapchain->height)} };
@@ -507,6 +528,8 @@ void renderer_shutdown(renderer_context* context)
 
 		{
 			//todo(alex): remove this garbage
+			vmaDestroyBuffer(context->gpu_allocator, context->vertex_data.buffer, context->vertex_data.allocation);
+
 			for (int i = 0; i < context->descriptor_pools.size(); ++i)
 				descriptor_pool_destroy(context, context->descriptor_pools[i]);
 			context->descriptor_pools.clear();
@@ -521,6 +544,14 @@ void renderer_shutdown(renderer_context* context)
 		}
 
 		destroy_frame_sync_data(context);
+
+		for (int i = 0; i < context->imediate_commands_pools.size(); ++i)
+			commands_pool_destroy(context, context->imediate_commands_pools[i]);
+		context->imediate_commands_pools.clear();
+
+		for (int i = 0; i < context->imediate_commands_fences.size(); ++i)
+			fence_destroy(context, context->imediate_commands_fences[i]);
+		context->imediate_commands_fences.clear();
 
 		if (context->swapchain)
 		{
@@ -550,4 +581,34 @@ void renderer_shutdown(renderer_context* context)
 		context->instance = VK_NULL_HANDLE;
 	}
 	delete context;
+}
+
+void immediate_submit(renderer_context* context, std::function<void(VkCommandBuffer cmd)>&& function)
+{
+	VkCommandPool imediate_cmd_pool = context->imediate_commands_pools[0];
+	
+	VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+	VkCommandBufferAllocateInfo command_allocate{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+	command_allocate.commandPool = imediate_cmd_pool;
+	command_allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	command_allocate.commandBufferCount = 1;
+
+	VK_CHECK(vkAllocateCommandBuffers(context->logical_device, &command_allocate, &command_buffer), context);
+
+	VkCommandBufferBeginInfo info{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+	info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	VK_CHECK(vkBeginCommandBuffer(command_buffer, &info), context);
+	{
+		function(command_buffer);
+	}
+	VK_CHECK(vkEndCommandBuffer(command_buffer), context);
+
+	VkSubmitInfo submit{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+	submit.commandBufferCount = 1;
+	submit.pCommandBuffers = &command_buffer;
+	VK_CHECK(vkQueueSubmit(context->graphics_queue, 1, &submit, context->imediate_commands_fences[0]), context);
+
+	vkWaitForFences(context->logical_device, 1, &context->imediate_commands_fences[0], true, UINT64_MAX);
+	vkResetFences(context->logical_device, 1, &context->imediate_commands_fences[0]);
+	VK_CHECK(vkResetCommandPool(context->logical_device, imediate_cmd_pool, 0), context);
 }

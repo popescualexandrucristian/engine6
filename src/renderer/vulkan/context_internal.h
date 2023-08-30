@@ -36,12 +36,24 @@ struct renderer_context
 
 	VkQueue graphics_queue;
 
+	std::vector<VkCommandPool> imediate_commands_pools;
+	std::vector<VkFence> imediate_commands_fences;
+
 	//alex(todo) : remove this garbage.
 	shader* vertex_shader;
 	shader* fragment_shader;
 	graphics_program* program;
 	std::vector<VkCommandPool> commands_pools;
 	std::vector<VkDescriptorPool> descriptor_pools;
+	buffer_data vertex_data;
+
+	struct vertex
+	{
+		float position[3];
+		float pedding;
+		float color[3];
+		float pedding2;
+	};
 };
 
 #define VK_CHECK(x, c)											\

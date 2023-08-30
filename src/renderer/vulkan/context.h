@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include <functional>
 
 struct renderer_context;
 
@@ -8,6 +9,8 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync,
 bool renderer_resize(renderer_context* context, uint32_t width, uint32_t height, bool use_vsync, bool use_depth);
 
 void renderer_update(renderer_context*, double);
+
+void immediate_submit(renderer_context* context, std::function<void(VkCommandBuffer cmd)>&& function);
 
 void renderer_shutdown(renderer_context*);
 
