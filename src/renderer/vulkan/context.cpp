@@ -343,7 +343,7 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync,
 		//todo(alex): remove this garbage
 		out->vertex_shader = shader_init(out, "./shaders/tutorial.shader.vert.spv");
 		out->fragment_shader = shader_init(out, "./shaders/tutorial.shader.frag.spv");
-		out->program = graphics_program_init(out, { out->vertex_shader, out->fragment_shader }, {}, 0, true, true, true);
+		out->program = graphics_program_init(out, { out->vertex_shader, out->fragment_shader }, {}, 0, true, true, true, 1, &out->swapchain_format, out->depth_format, VK_FORMAT_UNDEFINED);
 
 		for (size_t i = 0; i < out->frame_syncs.size(); ++i)
 		{
@@ -411,10 +411,10 @@ void renderer_update(renderer_context* context, double delta_time)
 	color_attachment.clearValue = clear_color;
 
 	VkRenderingAttachmentInfo depth_attachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
-	depth_attachment.imageView = context->swapchain->depth_views[next_image_index];;
-	depth_attachment.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+	depth_attachment.imageView = context->swapchain->depth_views[next_image_index];
+	depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 	depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
 	VkClearValue clear_depth{};
 	clear_depth.depthStencil.depth = 1.0f;
@@ -428,6 +428,14 @@ void renderer_update(renderer_context* context, double delta_time)
 	pass_info.pColorAttachments = &color_attachment;
 	pass_info.pDepthAttachment = &depth_attachment;
 
+	VkImageMemoryBarrier2 depth_barreir = image_barrier(context->swapchain->depth_images[current_frame].image,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED,
+		VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, 0,
+		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS);
+
+	push_pipeline_barrier(command_buffer, 0, 0, nullptr, 1, &depth_barreir);
+
+
 	vkCmdBeginRendering(command_buffer, &pass_info);
 
 	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, context->program->pipeline);
@@ -438,14 +446,16 @@ void renderer_update(renderer_context* context, double delta_time)
 	vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 	vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
+	vkCmdDraw(command_buffer, 3, 1, 0, 0);
+
 	vkCmdEndRendering(command_buffer);
 
-	VkImageMemoryBarrier2 present_barreir = image_barrier(context->swapchain->images[current_frame],
+	VkImageMemoryBarrier2 present_color_barreir = image_barrier(context->swapchain->images[current_frame],
 		VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 
 		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS);
 
-	push_pipeline_barrier(command_buffer, 0, 0, nullptr, 1, &present_barreir);
+	push_pipeline_barrier(command_buffer, 0, 0, nullptr, 1, &present_color_barreir);
 
 	VK_CHECK(vkEndCommandBuffer(command_buffer), context);
 

@@ -101,7 +101,7 @@ std::vector<image_data> create_depth_images(renderer_context* context, swapchain
 {
 	std::vector<image_data> out;
 	for (size_t i = 0; i < image_count; ++i)
-		out.push_back(image_create(context, swapchain->width, swapchain->height, 1, context->depth_format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE));
+		out.push_back(image_create(context, swapchain->width, swapchain->height, 1, context->depth_format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE));
 
 	return out;
 }

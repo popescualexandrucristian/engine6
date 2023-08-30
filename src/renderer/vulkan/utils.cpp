@@ -112,6 +112,8 @@ image_data image_create(renderer_context* renderer_context, uint32_t width, uint
 
 	VmaAllocationCreateInfo allocation_info{};
 	allocation_info.flags = memory_usage;
+	allocation_info.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
 
 	VK_CHECK(vmaCreateImage(renderer_context->gpu_allocator, &info, &allocation_info, &image.image, &image.memory_allocation, nullptr),renderer_context);
 	

@@ -728,7 +728,7 @@ std::vector<VkDescriptorSetLayout> createDescriptorLayoutsNoSharedSets(renderer_
     return descriptor_layouts;
 }
 
-graphics_program* graphics_program_init(renderer_context* context, shaders shaders, input_attributes vertex_input_attributes, size_t push_constant_size, bool use_depth, bool write_to_depth, bool sharedDescriptorSets)
+graphics_program* graphics_program_init(renderer_context* context, shaders shaders, input_attributes vertex_input_attributes, size_t push_constant_size, bool use_depth, bool write_to_depth, bool sharedDescriptorSets, uint32_t color_attachment_count, const VkFormat* color_attachment_formats, VkFormat depth_attachment_format, VkFormat stencil_attachment_format)
 {
     VkGraphicsPipelineCreateInfo create_info{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     create_info.stageCount = uint32_t(shaders.size());
@@ -938,6 +938,13 @@ graphics_program* graphics_program_init(renderer_context* context, shaders shade
     
     if(push_constant_range.stageFlags == 0)
         layout_create_info.pushConstantRangeCount = 0;
+
+    VkPipelineRenderingCreateInfo rendering_info = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+    rendering_info.colorAttachmentCount = color_attachment_count;
+    rendering_info.pColorAttachmentFormats = color_attachment_formats;
+    rendering_info.depthAttachmentFormat = depth_attachment_format;
+    rendering_info.stencilAttachmentFormat = stencil_attachment_format;
+    create_info.pNext = &rendering_info;
 
     VK_CHECK(vkCreatePipelineLayout(context->logical_device, &layout_create_info, context->host_allocator, &pipeline_layout), context);
     if(pipeline_layout == VK_NULL_HANDLE)
