@@ -4,7 +4,7 @@
 #include <vector>
 #include <log.h>
 #include <swapchain.h>
-#include <program.h>
+#include <acp_program_vulkan.h>
 
 #define VMA_STATIC_VULKAN_FUNCTIONS 1
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
@@ -343,18 +343,18 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync,
 	
 	{
 		//todo(alex): remove this garbage
-		out->vertex_shader = shader_init(out, "./shaders/from_buffers.vert.spv");
-		out->fragment_shader = shader_init(out, "./shaders/from_buffers.frag.spv");
+		out->vertex_shader = acp_vulkan::shader_init(out->logical_device, out->host_allocator, "./shaders/from_buffers.vert.spv");
+		out->fragment_shader = acp_vulkan::shader_init(out->logical_device, out->host_allocator, "./shaders/from_buffers.frag.spv");
 
 
-		input_attribute_data vertex_shader_input_attributes{};
+		acp_vulkan::input_attribute_data vertex_shader_input_attributes{};
 		vertex_shader_input_attributes.binding = 0;
 		vertex_shader_input_attributes.input_rate = VK_VERTEX_INPUT_RATE_VERTEX;
 		vertex_shader_input_attributes.offsets = { offsetof(renderer_context::vertex, position), offsetof(renderer_context::vertex, color)};
 		vertex_shader_input_attributes.locations = { 0, 1 };
 		vertex_shader_input_attributes.stride = sizeof(renderer_context::vertex);
 
-		out->program = graphics_program_init(out, { out->vertex_shader, out->fragment_shader }, {vertex_shader_input_attributes}, 0, true, true, true, 1, &out->swapchain_format, out->depth_format, VK_FORMAT_UNDEFINED);
+		out->program = acp_vulkan::graphics_program_init(out->logical_device, out->host_allocator, { out->vertex_shader, out->fragment_shader }, {vertex_shader_input_attributes}, 0, true, true, true, 1, &out->swapchain_format, out->depth_format, VK_FORMAT_UNDEFINED);
 
 		for (size_t i = 0; i < out->frame_syncs.size(); ++i)
 		{
@@ -369,6 +369,10 @@ renderer_context* renderer_init(uint32_t width, uint32_t height, bool use_vsync,
 		};
 
 		out->vertex_data = upload_mesh(out, verts_data, 3, sizeof(renderer_context::vertex));
+
+		//load texture from block format
+		//display texture
+		//pack all the nice calls in ortodox c++ lib
 	}
 	return out;
 
@@ -538,9 +542,9 @@ void renderer_shutdown(renderer_context* context)
 				commands_pool_destroy(context, context->commands_pools[i]);
 			context->commands_pools.clear();
 
-			graphics_program_destroy(context, context->program);
-			shader_destroy(context, context->fragment_shader);
-			shader_destroy(context, context->vertex_shader);
+			acp_vulkan::graphics_program_destroy(context->logical_device, context->host_allocator, context->program);
+			acp_vulkan::shader_destroy(context->logical_device, context->host_allocator, context->fragment_shader);
+			acp_vulkan::shader_destroy(context->logical_device, context->host_allocator, context->vertex_shader);
 		}
 
 		destroy_frame_sync_data(context);

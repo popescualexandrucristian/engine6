@@ -36,8 +36,6 @@ set(MAIN_RENDERER
 		src/renderer/vulkan/swapchain.h
 		src/renderer/vulkan/context.cpp
 		src/renderer/vulkan/swapchain.cpp
-		src/renderer/vulkan/program.h
-		src/renderer/vulkan/program.cpp
 		src/renderer/vulkan/utils.h
 		src/renderer/vulkan/utils.cpp
 	)
@@ -64,6 +62,8 @@ file(GLOB ALL_SHADERS ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan/shaders/*.
 add_subdirectory (${EXTERNAL_LIB_PATH})
 set(LIBS
 	${Vulkan_LIBRARIES}
+	acp_vulkan
+	vma
 )
 
 #main

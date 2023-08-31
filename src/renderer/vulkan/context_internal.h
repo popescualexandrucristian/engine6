@@ -4,6 +4,7 @@
 #include <swapchain.h>
 #include <stdio.h>
 #include <utils.h>
+#include <acp_program_vulkan.h>
 
 struct shader;
 struct graphics_program;
@@ -40,9 +41,9 @@ struct renderer_context
 	std::vector<VkFence> imediate_commands_fences;
 
 	//alex(todo) : remove this garbage.
-	shader* vertex_shader;
-	shader* fragment_shader;
-	graphics_program* program;
+	acp_vulkan::shader* vertex_shader;
+	acp_vulkan::shader* fragment_shader;
+	acp_vulkan::graphics_program* program;
 	std::vector<VkCommandPool> commands_pools;
 	std::vector<VkDescriptorPool> descriptor_pools;
 	buffer_data vertex_data;
