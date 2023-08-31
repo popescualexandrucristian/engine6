@@ -1,0 +1,3 @@
+[submodule "external/acp_vulkan"]
+	path = external/acp_vulkan
+	url = https://github.com/popescualexandrucristian/acp_vulkan.git
