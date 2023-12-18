@@ -166,9 +166,9 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	}
 
 	user_data::vertex verts_data[3] = {
-		{{-0.5,  0.5, 0.0},0.0,{1.0, 0.0, 0.0}},
-		{{ 0.5,  0.5, 0.0},0.0,{0.0, 1.0, 0.0}},
-		{{ 0.0, -0.5, 0.0},0.0,{0.0, 0.0, 1.0}}
+		{{  0.5,  -0.5, 0.0},0.0,{1.0, 0.0, 0.0}},
+		{{ -0.5,  -0.5, 0.0},0.0,{0.0, 1.0, 0.0}},
+		{{  0.0,   0.5, 0.0},0.0,{0.0, 0.0, 1.0}}
 	};
 
 	user->vertex_data = acp_vulkan::upload_mesh(context, verts_data, 3, sizeof(user_data::vertex));
