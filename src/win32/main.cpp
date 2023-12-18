@@ -6,15 +6,11 @@
 
 #include <version.h>
 
-#include <context.h>
+#include <user_context.h>
+#include <acp_context/acp_vulkan_context.h>
 #include <vulkan/vulkan_win32.h>
 
 constexpr double update_rate{ 1.0 / 60.0 };
-constexpr uint32_t initial_width = 800;
-constexpr uint32_t initial_height = 600;
-constexpr bool use_vsync = true;
-constexpr bool use_depth = true;
-
 static HWND window_handle = NULL;
 
 extern "C"
@@ -216,7 +212,7 @@ void destroy_renderer_surface(VkSurfaceKHR surface, VkInstance instance)
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 }
 
-static renderer_context* render_context = nullptr;
+static acp_vulkan::renderer_context* render_context = nullptr;
 
 LRESULT WINAPI window_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -235,7 +231,7 @@ LRESULT WINAPI window_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return 0;
 		RECT client_rect{};
 		GetClientRect(hWnd, &client_rect);
-		renderer_resize(render_context, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top, use_vsync, use_depth);
+		acp_vulkan::renderer_resize(render_context, client_rect.right - client_rect.left, client_rect.bottom - client_rect.top);
 		return 0;
 	}
 
@@ -334,7 +330,7 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	UpdateWindow(h_wnd);
 	window_handle = h_wnd;
 
-	render_context = renderer_init(initial_width, initial_height, use_vsync, use_depth);
+	render_context = init_user_render_context();
 	if (!render_context)
 	{
 		MessageBox(NULL, "cannot initialize the rendering context.", "error", MB_OK);
