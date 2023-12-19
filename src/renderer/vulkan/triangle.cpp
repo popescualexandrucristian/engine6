@@ -103,7 +103,7 @@ static const acp_vulkan::renderer_context::user_context_data::resize_context use
 	};
 }
 
-acp_vulkan::renderer_context* init_user_render_context()
+acp_vulkan::renderer_context* init_triangle_render_context()
 {
 	acp_vulkan::renderer_context::user_context_data user_context{};
 	user_context.renderer_init = &user_init;

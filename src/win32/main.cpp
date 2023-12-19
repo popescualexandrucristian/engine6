@@ -6,6 +6,10 @@
 
 #include <version.h>
 
+#include <triangle.h>
+#include <quad_with_vertex_and_index.h>
+#include <quad_with_vertex_index_and_texture.h>
+
 #include <acp_context/acp_vulkan_context.h>
 
 constexpr double update_rate{ 1.0 / 60.0 };
@@ -138,7 +142,11 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	window_handle = h_wnd;
 
 #ifdef TRIANGLE_EXAMPLE
-	render_context = init_user_render_context();
+	render_context = init_triangle_render_context();
+#elif QUAD_EXAMPLE
+	render_context = init_quad_render_context();
+#elif QUAD_WITH_TEXTURE_EXAMPLE
+	render_context = init_quad_with_texture_render_context();
 #else
 #error No example selected please set the define for one of them.
 #endif
