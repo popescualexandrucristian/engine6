@@ -55,7 +55,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/shaders_build)
 file(GLOB ALL_SHADERS ${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan/shaders/*.*)
 
 #external
-add_subdirectory (${EXTERNAL_LIB_PATH})
 set(LIBS
 	${Vulkan_LIBRARIES}
 	acp_vulkan
@@ -128,6 +127,9 @@ set (COMPILATION_DEFINES
 	${ENABLE_VULKAN_DEBUG_MARKERS_DEFINE}
 	${ENABLE_VULKAN_VALIDATION_SYNCHRONIZATION_LAYER_DEFINE}
 )
+
+#external
+add_subdirectory (${EXTERNAL_LIB_PATH})
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE ${COMPILATION_DEFINES})
 

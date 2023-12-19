@@ -21,7 +21,15 @@ target_sources(acp_vulkan PRIVATE
 	acp_vulkan/acp_context/acp_vulkan_context_swapchain.h
     acp_vulkan/acp_context/acp_vulkan_context_swapchain.cpp
     )
+if(MSVC)
+target_sources(acp_vulkan PRIVATE 
+	acp_vulkan/acp_context/win32/acp_vulkan_context_win32.cpp
+	)
+endif()
 target_include_directories(acp_vulkan PUBLIC acp_vulkan)
+
+target_compile_definitions(acp_vulkan PRIVATE ${COMPILATION_DEFINES})
+
 
 if(USE_STATIC_CRT AND MSVC)
 target_compile_options(acp_vulkan PRIVATE /MT)

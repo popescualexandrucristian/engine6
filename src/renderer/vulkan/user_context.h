@@ -5,8 +5,8 @@
 
 constexpr uint32_t initial_width = 800;
 constexpr uint32_t initial_height = 600;
-constexpr bool use_vsync = true;
-constexpr bool use_depth = true;
+constexpr bool use_vsync = false;
+constexpr bool use_depth = false;
 
 struct user_data
 {
