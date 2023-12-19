@@ -17,6 +17,8 @@ option(ENABLE_VULKAN_DEBUG_MARKERS "Enable markers that can name or tag objects 
 option(ENABLE_VULKAN_VALIDATION_LAYERS "Enable Vulkan validation layers" OFF)
 option(ENABLE_VULKAN_VALIDATION_SYNCHRONIZATION_LAYER "Enable Vulkan validation syncronization layers" OFF)
 option(ENABLE_DEBUG_SYMBOLS_IN_SHADERS "Enable debug symbols in the generated shaders" OFF)
+set(EXAMPLE_NAME "Triange" CACHE STRING "Target example")
+set_property(CACHE EXAMPLE_NAME PROPERTY STRINGS Triange Quad TexturedQuad)
 
 set(PROJECT_NAME engine6)
 
@@ -32,8 +34,14 @@ find_package(Vulkan)
 include_directories(${Vulkan_INCLUDE_DIRS})
 
 set(MAIN_RENDERER
-		src/renderer/vulkan/user_context.h
-		src/renderer/vulkan/user_context.cpp
+		src/renderer/vulkan/triangle.h
+		src/renderer/vulkan/triangle.cpp
+		
+		src/renderer/vulkan/quad_with_vertex_and_index.h
+		src/renderer/vulkan/quad_with_vertex_and_index.cpp
+		
+		src/renderer/vulkan/quad_with_vertex_index_and_texture.h
+		src/renderer/vulkan/quad_with_vertex_index_and_texture.cpp
 	)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan")
 source_group(renderer FILES ${MAIN_RENDERER})
@@ -119,6 +127,23 @@ set (ENABLE_VULKAN_DEBUG_MARKERS_DEFINE
 )
 endif()
 
+if(EXAMPLE_NAME=Triange)
+set (EXAMPLE_DEFINE
+	TRIANGLE_EXAMPLE=1
+)
+elseif(EXAMPLE_NAME=Quad)
+set (EXAMPLE_DEFINE
+	QUAD_EXAMPLE=1
+)
+elseif(EXAMPLE_NAME=TexturedQuad)
+set (EXAMPLE_DEFINE
+	QUAD_WITH_TEXTURE_EXAMPLE=1
+)
+else()
+set (EXAMPLE_DEFINE
+)
+endif()
+
 set (COMPILATION_DEFINES
 	_CRT_SECURE_NO_WARNINGS=1 
 	WIN32_LEAN_AND_MEAN=1
@@ -126,6 +151,7 @@ set (COMPILATION_DEFINES
 	${ENABLE_VULKAN_VALIDATION_LAYERS_DEFINE}
 	${ENABLE_VULKAN_DEBUG_MARKERS_DEFINE}
 	${ENABLE_VULKAN_VALIDATION_SYNCHRONIZATION_LAYER_DEFINE}
+	${EXAMPLE_DEFINE}
 )
 
 #external

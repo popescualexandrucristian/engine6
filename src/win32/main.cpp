@@ -6,7 +6,6 @@
 
 #include <version.h>
 
-#include <user_context.h>
 #include <acp_context/acp_vulkan_context.h>
 
 constexpr double update_rate{ 1.0 / 60.0 };
@@ -121,7 +120,7 @@ HWND create_window(char* title, int x, int y, int width, int height, BYTE type, 
 
 int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nShowCmd)
 {
-	HWND h_wnd = create_window(const_cast<char*>(PROJECT_NAME " " PROJECT_VERSION), 0, 0, initial_width, initial_height, PFD_TYPE_RGBA, 0);
+	HWND h_wnd = create_window(const_cast<char*>(PROJECT_NAME " " PROJECT_VERSION), 0, 0, 800, 600, PFD_TYPE_RGBA, 0);
 	if (h_wnd == NULL)
 		exit(1);
 
@@ -138,7 +137,11 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	UpdateWindow(h_wnd);
 	window_handle = h_wnd;
 
+#ifdef TRIANGLE_EXAMPLE
 	render_context = init_user_render_context();
+#else
+#error No example selected please set the define for one of them.
+#endif
 	if (!render_context)
 	{
 		MessageBox(NULL, "cannot initialize the rendering context.", "error", MB_OK);
