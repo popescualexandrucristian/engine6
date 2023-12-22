@@ -9,8 +9,11 @@
 #include <triangle.h>
 #include <quad_with_vertex_and_index.h>
 #include <quad_with_vertex_index_and_texture.h>
+#include <dear_imgui.h>
 
 #include <acp_context/acp_vulkan_context.h>
+#include <imgui.h>
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 constexpr double update_rate{ 1.0 / 60.0 };
 static HWND window_handle = NULL;
@@ -59,6 +62,7 @@ LRESULT WINAPI window_proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		return 0;
 	}
 
+	ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam);
 	return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
@@ -86,7 +90,7 @@ HWND create_window(char* title, int x, int y, int width, int height, BYTE type, 
 	RECT window_rect = { 0, 0, width, height };
 	AdjustWindowRect(&window_rect, WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, FALSE);
 
-	HWND h_wnd = CreateWindow(PROJECT_NAME, title, WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+	HWND h_wnd = CreateWindowEx(0, PROJECT_NAME, title, WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 
 		x, y, window_rect.right - window_rect.left, window_rect.bottom - window_rect.top, NULL, NULL, h_instance, NULL);
 
 	if (!h_wnd) {
@@ -147,6 +151,8 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	render_context = init_quad_render_context();
 #elif QUAD_WITH_TEXTURE_EXAMPLE
 	render_context = init_quad_with_texture_render_context();
+#elif DEAR_IMGUI_EXAMPLE
+	render_context = init_imgui_render_context();
 #else
 #error No example selected please set the define for one of them.
 #endif

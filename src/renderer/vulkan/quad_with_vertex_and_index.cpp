@@ -5,17 +5,13 @@
 #include <acp_context/acp_vulkan_context_utils.h>
 #include <acp_context/acp_vulkan_context_swapchain.h>
 
-
-constexpr bool use_vsync = false;
-constexpr bool use_depth = false;
-
 struct user_data
 {
 	acp_vulkan::shader* vertex_shader;
 	acp_vulkan::shader* fragment_shader;
 	acp_vulkan::graphics_program* program;
 	std::vector<VkCommandPool> commands_pools;
-	std::vector<VkDescriptorPool> descriptor_pools;
+	std::vector<VkCommandBuffer> command_buffers;
 	acp_vulkan::buffer_data vertex_data;
 	acp_vulkan::buffer_data index_data;
 
@@ -31,7 +27,12 @@ struct user_data
 static bool user_update(acp_vulkan::renderer_context* context, size_t current_frame, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, double)
 {
 	user_data* user = reinterpret_cast<user_data*>(context->user_context.user_data);
-	ACP_VK_CHECK(vkResetCommandPool(context->logical_device, user->commands_pools[current_frame], 0), context);
+	if (user->command_buffers[current_frame] != VK_NULL_HANDLE)
+	{
+		vkFreeCommandBuffers(context->logical_device, user->commands_pools[current_frame], 1, &user->command_buffers[current_frame]);
+		ACP_VK_CHECK(vkResetCommandPool(context->logical_device, user->commands_pools[current_frame], 0), context);
+		user->command_buffers[current_frame] = VK_NULL_HANDLE;
+	}
 
 	VkCommandBuffer command_buffer = VK_NULL_HANDLE;
 	VkCommandBufferAllocateInfo command_allocate{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
@@ -40,6 +41,7 @@ static bool user_update(acp_vulkan::renderer_context* context, size_t current_fr
 	command_allocate.commandBufferCount = 1;
 
 	ACP_VK_CHECK(vkAllocateCommandBuffers(context->logical_device, &command_allocate, &command_buffer), context);
+	user->command_buffers[current_frame] = command_buffer;
 
 	VkCommandBufferBeginInfo command_begin{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
 	command_begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -99,7 +101,7 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	for (size_t i = 0; i < context->frame_syncs.size(); ++i)
 	{
 		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context));
-		user->descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128));
+		user->command_buffers.push_back(VK_NULL_HANDLE);
 	}
 
 	user_data::vertex verts_data[4] = {
@@ -122,10 +124,6 @@ static void user_shutdown(acp_vulkan::renderer_context* context)
 
 	vmaDestroyBuffer(context->gpu_allocator, user->vertex_data.buffer, user->vertex_data.allocation);
 	vmaDestroyBuffer(context->gpu_allocator, user->index_data.buffer, user->index_data.allocation);
-
-	for (int i = 0; i < user->descriptor_pools.size(); ++i)
-		descriptor_pool_destroy(context, user->descriptor_pools[i]);
-	user->descriptor_pools.clear();
 
 	for (int i = 0; i < user->commands_pools.size(); ++i)
 		commands_pool_destroy(context, user->commands_pools[i]);
@@ -162,8 +160,8 @@ acp_vulkan::renderer_context* init_quad_render_context()
 		{
 			.width = width_and_height.width,
 			.height = width_and_height.height,
-			.use_vsync = use_vsync,
-			.use_depth = use_depth,
+			.use_vsync = true,
+			.use_depth = true,
 #if defined(ENABLE_DEBUG_CONSOLE) && defined(ENABLE_VULKAN_VALIDATION_LAYERS)
 			.use_validation = true,
 #endif

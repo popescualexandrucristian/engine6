@@ -5,7 +5,11 @@
 #include <acp_context/acp_vulkan_context_utils.h>
 #include <acp_context/acp_vulkan_context_swapchain.h>
 
-struct quad_with_texture_user_data
+#include <imgui.h>
+#include <backends/imgui_impl_vulkan.h>
+#include <backends/imgui_impl_win32.h>
+
+struct imgui_user_data
 {
 	acp_vulkan::shader* vertex_shader;
 	acp_vulkan::shader* fragment_shader;
@@ -34,20 +38,26 @@ struct quad_with_texture_user_data
 
 static bool user_update(acp_vulkan::renderer_context* context, size_t current_frame, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, double)
 {
-	quad_with_texture_user_data* user = reinterpret_cast<quad_with_texture_user_data*>(context->user_context.user_data);
+#ifdef _WIN32
+	ImGui_ImplWin32_NewFrame();
+#else
+#error Not implemented for this platform.
+#endif
+
+	imgui_user_data* user = reinterpret_cast<imgui_user_data*>(context->user_context.user_data);
+
 	if (user->command_buffers[current_frame] != VK_NULL_HANDLE)
 	{
 		vkFreeCommandBuffers(context->logical_device, user->commands_pools[current_frame], 1, &user->command_buffers[current_frame]);
 		ACP_VK_CHECK(vkResetCommandPool(context->logical_device, user->commands_pools[current_frame], 0), context);
 		user->command_buffers[current_frame] = VK_NULL_HANDLE;
 	}
-
+	
 	VkCommandBuffer command_buffer = VK_NULL_HANDLE;
 	VkCommandBufferAllocateInfo command_allocate{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 	command_allocate.commandPool = user->commands_pools[current_frame];
 	command_allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	command_allocate.commandBufferCount = 1;
-
+	command_allocate.commandBufferCount = 1;	
 	ACP_VK_CHECK(vkAllocateCommandBuffers(context->logical_device, &command_allocate, &command_buffer), context);
 	user->command_buffers[current_frame] = command_buffer;
 
@@ -85,13 +95,152 @@ static bool user_update(acp_vulkan::renderer_context* context, size_t current_fr
 
 	vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 
+	ImGui::NewFrame();
+	bool show = true;
+	ImGui::ShowDemoWindow(&show);
+	ImGui::EndFrame();
+	ImGui::Render();
+
+	if (ImDrawData* imgui_data = ImGui::GetDrawData(); imgui_data)
+	{
+		ImGui_ImplVulkan_RenderDrawData(imgui_data, command_buffer);
+	}
+
 	acp_vulkan::renderer_end_main_pass(command_buffer, context);
 	return true;
 }
 
+static bool load_binary_data(const char* filePath, uint32_t** out, size_t& out_size)
+{
+	FILE* file = fopen(filePath, "rb");
+	fseek(file, 0, SEEK_END);
+	long total_bytes = ftell(file);
+	total_bytes = ((total_bytes + alignof(uint32_t) - 1) / alignof(uint32_t)) * alignof(uint32_t);
+	fseek(file, 0, SEEK_SET);
+	uint32_t* local = reinterpret_cast<uint32_t*>(_aligned_malloc(total_bytes, alignof(uint32_t)));
+	size_t read_bytes = fread(local, 1, total_bytes, file);
+	if (total_bytes != read_bytes)
+	{
+		_aligned_free(local);
+		out = nullptr;
+		out_size = 0;
+		return false;
+	}
+	*out = local;
+	out_size = total_bytes / sizeof(uint32_t);
+	fclose(file);
+	return true;
+}
+
+static void init_imgui(acp_vulkan::renderer_context* context)
+{
+	VkDescriptorPoolSize pool_sizes[] =
+	{
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, 16 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 16 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 16 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 16 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 16 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 16 }
+	};
+
+	VkDescriptorPoolCreateInfo pool_info = {};
+	pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	pool_info.maxSets = 128;
+	pool_info.poolSizeCount = sizeof(pool_sizes) / sizeof(pool_sizes[0]);
+	pool_info.pPoolSizes = pool_sizes;
+
+	VkDescriptorPool imgui_pool{ VK_NULL_HANDLE };
+	ACP_VK_CHECK(vkCreateDescriptorPool(context->logical_device, &pool_info, context->host_allocator, &imgui_pool),context);
+	imgui_user_data* user = reinterpret_cast<imgui_user_data*>(context->user_context.user_data);
+	user->descriptor_pools.push_back(imgui_pool);
+	//initialize imgui library
+	ImGui::CreateContext();
+
+#ifdef _WIN32
+	void* main_window_handle = acp_vulkan_os_specific_get_main_window_handle();
+	ImGui_ImplWin32_Init(main_window_handle); 
+#else
+	#error Not implemented for this platform.
+#endif
+
+	//TODO(Alex) : Save the settings for imgui in a proper way.
+	ImGuiIO& io = ImGui::GetIO();
+	io.IniFilename = nullptr;
+	io.LogFilename = nullptr;
+
+	size_t font_size = 0;
+	uint32_t* font_data = nullptr;
+	bool has_font = load_binary_data("./fonts/Cousine-Regular.ttf", &font_data, font_size);
+	if (!has_font)
+	{
+#ifdef ENABLE_DEBUG_CONSOLE
+		printf("Unable to load the imgui font\n");
+#endif
+		abort();
+	}
+	const ImFontConfig font_config{};
+	ImFont* font = io.Fonts->AddFontFromMemoryTTF(font_data, static_cast<int>(font_size * sizeof(uint32_t)), 16.0f);
+	if (font)
+		io.FontDefault = font;
+
+	size_t frag_size = 0;
+	uint32_t* frag_data = nullptr;
+	bool has_frag = load_binary_data("./shaders/imgui.frag.spv", &frag_data, frag_size);
+
+	size_t vert_size = 0;
+	uint32_t* vert_data = nullptr;
+	bool has_vert = load_binary_data("./shaders/imgui.vert.spv", &vert_data, vert_size);
+
+	if (!has_frag || !has_vert)
+	{
+#ifdef ENABLE_DEBUG_CONSOLE
+		printf("Unable to load the imgui shaders\n");
+#endif
+		abort();
+	}
+
+	//this initializes imgui for Vulkan
+	ImGui_ImplVulkan_InitInfo init_info = {};
+	init_info.Instance = context->instance;
+	init_info.PhysicalDevice = context->physical_device;
+	init_info.Device = context->logical_device;
+	init_info.Queue = context->graphics_queue;
+	init_info.DescriptorPool = imgui_pool;
+	init_info.MinImageCount = 3;
+	init_info.ImageCount = 3;
+	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	init_info.UseDynamicRendering = true;
+	init_info.ColorAttachmentFormat = context->swapchain_format;
+	init_info.DepthAttachmentFormat = context->depth_format;
+	init_info.GPUAllocator = context->gpu_allocator;
+	init_info.VertData = vert_data;
+	init_info.VertSize = vert_size;
+	init_info.FragData = frag_data;
+	init_info.FragSize = frag_size;
+
+	ImGui_ImplVulkan_Init(&init_info, VK_NULL_HANDLE);
+
+	_aligned_free(frag_data);
+	_aligned_free(vert_data);
+
+	//execute a gpu command to upload imgui font textures
+	immediate_submit(context, [&](VkCommandBuffer) {
+		ImGui_ImplVulkan_CreateFontsTexture();
+		});
+
+	_aligned_free(font_data);
+}
+
 static bool user_init(acp_vulkan::renderer_context* context)
 {
-	quad_with_texture_user_data* user = reinterpret_cast<quad_with_texture_user_data*>(context->user_context.user_data);
+	imgui_user_data* user = reinterpret_cast<imgui_user_data*>(context->user_context.user_data);
 
 	user->vertex_shader = acp_vulkan::shader_init(context->logical_device, context->host_allocator, "./shaders/quad_vertex_index_texture.vert.spv");
 	user->fragment_shader = acp_vulkan::shader_init(context->logical_device, context->host_allocator, "./shaders/quad_vertex_index_texture.frag.spv");
@@ -100,11 +249,11 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	vertex_shader_input_attributes.binding = 0;
 	vertex_shader_input_attributes.input_rate = VK_VERTEX_INPUT_RATE_VERTEX;
 	vertex_shader_input_attributes.offsets = { 
-		offsetof(quad_with_texture_user_data::vertex, position), 
-		offsetof(quad_with_texture_user_data::vertex, color), 
-		offsetof(quad_with_texture_user_data::vertex, uv) };
+		offsetof(imgui_user_data::vertex, position), 
+		offsetof(imgui_user_data::vertex, color), 
+		offsetof(imgui_user_data::vertex, uv) };
 	vertex_shader_input_attributes.locations = { 0, 1, 2 };
-	vertex_shader_input_attributes.stride = sizeof(quad_with_texture_user_data::vertex);
+	vertex_shader_input_attributes.stride = sizeof(imgui_user_data::vertex);
 
 	user->program = acp_vulkan::graphics_program_init(
 		context->logical_device, context->host_allocator, 
@@ -118,7 +267,7 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		user->descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128));
 	}
 
-	quad_with_texture_user_data::vertex verts_data[4] = {
+	imgui_user_data::vertex verts_data[4] = {
 		{.position = {  0.5f, -0.5f, 0.0f},.color = {1.0f, 1.0f, 1.0f}, .uv = {0.0f,1.0f} },
 		{.position = { -0.5f, -0.5f, 0.0f},.color = {1.0f, 1.0f, 1.0f}, .uv = {1.0f,1.0f} },
 		{.position = { -0.5f,  0.5f, 0.0f},.color = {1.0f, 1.0f, 1.0f}, .uv = {1.0f,0.0f} },
@@ -127,7 +276,7 @@ static bool user_init(acp_vulkan::renderer_context* context)
 
 	uint16_t index_data[6] = { 0,1,2,2,3,0 };
 
-	user->vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(quad_with_texture_user_data::vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+	user->vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(imgui_user_data::vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 	user->index_data = acp_vulkan::upload_data(context, index_data, 6, sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
 	user->descriptor_set_resources = VK_NULL_HANDLE;
@@ -161,12 +310,21 @@ static bool user_init(acp_vulkan::renderer_context* context)
 
 	acp_vulkan::dds_data_free(&dds_data, context->host_allocator);
 
+	init_imgui(context);
+
 	return true;
 }
 
 static void user_shutdown(acp_vulkan::renderer_context* context)
 {
-	quad_with_texture_user_data* user = reinterpret_cast<quad_with_texture_user_data*>(context->user_context.user_data);
+#ifdef _WIN32
+	ImGui_ImplWin32_Shutdown();
+#else
+#error Not implemented for this platform.
+#endif
+	ImGui_ImplVulkan_Shutdown();
+
+	imgui_user_data* user = reinterpret_cast<imgui_user_data*>(context->user_context.user_data);
 
 	acp_vulkan::image_view_destroy(context, user->image_view);
 	acp_vulkan::image_destroy(context, user->image);
@@ -200,14 +358,14 @@ static const acp_vulkan::renderer_context::user_context_data::resize_context use
 	};
 }
 
-acp_vulkan::renderer_context* init_quad_with_texture_render_context()
+acp_vulkan::renderer_context* init_imgui_render_context()
 {
 	acp_vulkan::renderer_context::user_context_data user_context{};
 	user_context.renderer_init = &user_init;
 	user_context.renderer_resize = &user_resize;
 	user_context.renderer_shutdown = &user_shutdown;
 	user_context.renderer_update = &user_update;
-	user_context.user_data = new quad_with_texture_user_data();
+	user_context.user_data = new imgui_user_data();
 
 	acp_vulkan_os_specific_width_and_height width_and_height = acp_vulkan_os_specific_get_width_and_height();
 	acp_vulkan::renderer_context* out = acp_vulkan::renderer_init(
@@ -215,7 +373,7 @@ acp_vulkan::renderer_context* init_quad_with_texture_render_context()
 			.width = width_and_height.width,
 			.height = width_and_height.height,
 			.use_vsync = true,
-			.use_depth = false,
+			.use_depth = true,
 #if defined(ENABLE_DEBUG_CONSOLE) && defined(ENABLE_VULKAN_VALIDATION_LAYERS)
 			.use_validation = true,
 #endif

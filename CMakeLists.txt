@@ -17,8 +17,8 @@ option(ENABLE_VULKAN_DEBUG_MARKERS "Enable markers that can name or tag objects 
 option(ENABLE_VULKAN_VALIDATION_LAYERS "Enable Vulkan validation layers" OFF)
 option(ENABLE_VULKAN_VALIDATION_SYNCHRONIZATION_LAYER "Enable Vulkan validation syncronization layers" OFF)
 option(ENABLE_DEBUG_SYMBOLS_IN_SHADERS "Enable debug symbols in the generated shaders" OFF)
-set(EXAMPLE_NAME "Triange" CACHE STRING "Target example")
-set_property(CACHE EXAMPLE_NAME PROPERTY STRINGS Triange Quad TexturedQuad)
+set(EXAMPLE_NAME "DearIMGUI" CACHE STRING "Target example")
+set_property(CACHE EXAMPLE_NAME PROPERTY STRINGS Triange Quad TexturedQuad DearIMGUI)
 
 set(PROJECT_NAME engine6)
 
@@ -42,6 +42,9 @@ set(MAIN_RENDERER
 		
 		src/renderer/vulkan/quad_with_vertex_index_and_texture.h
 		src/renderer/vulkan/quad_with_vertex_index_and_texture.cpp
+
+		src/renderer/vulkan/dear_imgui.h
+		src/renderer/vulkan/dear_imgui.cpp
 	)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan")
 source_group(renderer FILES ${MAIN_RENDERER})
@@ -67,6 +70,7 @@ set(LIBS
 	${Vulkan_LIBRARIES}
 	acp_vulkan
 	vma
+	imgui
 )
 
 #main
@@ -139,6 +143,10 @@ elseif(EXAMPLE_NAME STREQUAL TexturedQuad)
 set (EXAMPLE_DEFINE
 	QUAD_WITH_TEXTURE_EXAMPLE=1
 )
+elseif(EXAMPLE_NAME STREQUAL DearIMGUI)
+set (EXAMPLE_DEFINE
+	DEAR_IMGUI_EXAMPLE=1
+)
 else()
 set (EXAMPLE_DEFINE
 )
@@ -147,6 +155,8 @@ endif()
 set (COMPILATION_DEFINES
 	_CRT_SECURE_NO_WARNINGS=1 
 	WIN32_LEAN_AND_MEAN=1
+	#_SECURE_SCL=0
+	#_HAS_ITERATOR_DEBUGGING=0
 	${ENABLE_DEBUG_CONSOLE_DEFINE}
 	${ENABLE_VULKAN_VALIDATION_LAYERS_DEFINE}
 	${ENABLE_VULKAN_DEBUG_MARKERS_DEFINE}
@@ -164,13 +174,12 @@ target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBS})
 set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 if(USE_STATIC_CRT AND MSVC)
-target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE /MT)
-target_link_options(${CMAKE_PROJECT_NAME} PRIVATE /INCREMENTAL:NO /NODEFAULTLIB:MSVCRT)
-endif()
-
-if(ENABLE_ADDRESS_SENITIZER)
+	target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE /MT)
+	target_link_options(${CMAKE_PROJECT_NAME} PRIVATE /INCREMENTAL:NO /NODEFAULTLIB:MSVCRT)
+elseif(ENABLE_ADDRESS_SENITIZER)
 	target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE "$<$<CONFIG:DEBUG>:/fsanitize=address>")
 	target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE "$<$<CONFIG:RelWithDebInfo>:/fsanitize=address>")
+	target_link_options(${CMAKE_PROJECT_NAME} PRIVATE /INCREMENTAL:NO)
 endif()
 
 #build shaders
@@ -181,3 +190,7 @@ foreach(SHADER ${ALL_SHADERS})
 endforeach(SHADER)
 
 file(COPY ${PROJECT_SOURCE_DIR}/textures DESTINATION ${CMAKE_SOURCE_DIR}/bin)
+file(GLOB FONT_FILES
+  "${PROJECT_SOURCE_DIR}/external/imgui/misc/fonts/*.ttf"
+)
+file(COPY ${FONT_FILES} DESTINATION ${CMAKE_SOURCE_DIR}/bin/fonts)
