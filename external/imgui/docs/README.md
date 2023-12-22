@@ -1,8 +1,12 @@
-This is not the original version of the library for that please visit https://github.com/ocornut/imgui/commit/f039e69b9cb3434eb1bdfc764cb2b37afe50d275
+Warning
+=====
+This is not the original version of the library for that please visit :
+https://github.com/ocornut/imgui/commit/f039e69b9cb3434eb1bdfc764cb2b37afe50d275
+
 This is a modified version by Popescu Alexandru-Cristian(popescualexandrucristian@gmail.com) 
-	- it uses VMA for memory allocations.
-	- fixes some issues that I had with dynamic rendering.
-	- it uses shaders from the target program where it is deployed.
+* it uses VMA for memory allocations.
+* fixes some issues that I had with dynamic rendering.
+* it uses shaders from the target program where it is deployed.
 
 See https://github.com/popescualexandrucristian/engine6/raw/main/external/imgui/imgui.diff for details.
 
