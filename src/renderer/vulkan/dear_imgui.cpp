@@ -13,7 +13,7 @@ struct imgui_user_data
 {
 	acp_vulkan::shader* vertex_shader;
 	acp_vulkan::shader* fragment_shader;
-	acp_vulkan::graphics_program* program;
+	acp_vulkan::program* program;
 	std::vector<VkCommandPool> commands_pools;
 	std::vector<VkCommandBuffer> command_buffers;
 	std::vector<VkDescriptorPool> descriptor_pools;
@@ -341,7 +341,7 @@ static void user_shutdown(acp_vulkan::renderer_context* context)
 		commands_pool_destroy(context, user->commands_pools[i]);
 	user->commands_pools.clear();
 
-	acp_vulkan::graphics_program_destroy(context->logical_device, context->host_allocator, user->program);
+	acp_vulkan::program_destroy(context->logical_device, context->host_allocator, user->program);
 	acp_vulkan::shader_destroy(context->logical_device, context->host_allocator, user->fragment_shader);
 	acp_vulkan::shader_destroy(context->logical_device, context->host_allocator, user->vertex_shader);
 

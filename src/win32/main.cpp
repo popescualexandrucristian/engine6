@@ -10,6 +10,7 @@
 #include <quad_with_vertex_and_index.h>
 #include <quad_with_vertex_index_and_texture.h>
 #include <dear_imgui.h>
+#include <compute.h>
 
 #include <acp_context/acp_vulkan_context.h>
 #include <imgui.h>
@@ -153,6 +154,8 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	render_context = init_quad_with_texture_render_context();
 #elif DEAR_IMGUI_EXAMPLE
 	render_context = init_imgui_render_context();
+#elif COMPUTE_EXAMPLE
+	render_context = init_compute_render_context();
 #else
 #error No example selected please set the define for one of them.
 #endif

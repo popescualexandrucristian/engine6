@@ -18,7 +18,7 @@ option(ENABLE_VULKAN_VALIDATION_LAYERS "Enable Vulkan validation layers" OFF)
 option(ENABLE_VULKAN_VALIDATION_SYNCHRONIZATION_LAYER "Enable Vulkan validation syncronization layers" OFF)
 option(ENABLE_DEBUG_SYMBOLS_IN_SHADERS "Enable debug symbols in the generated shaders" OFF)
 set(EXAMPLE_NAME "DearIMGUI" CACHE STRING "Target example")
-set_property(CACHE EXAMPLE_NAME PROPERTY STRINGS Triange Quad TexturedQuad DearIMGUI)
+set_property(CACHE EXAMPLE_NAME PROPERTY STRINGS Triange Quad TexturedQuad DearIMGUI Compute)
 
 set(PROJECT_NAME engine6)
 
@@ -45,6 +45,9 @@ set(MAIN_RENDERER
 
 		src/renderer/vulkan/dear_imgui.h
 		src/renderer/vulkan/dear_imgui.cpp
+		
+		src/renderer/vulkan/compute.h
+		src/renderer/vulkan/compute.cpp
 	)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/vulkan")
 source_group(renderer FILES ${MAIN_RENDERER})
@@ -146,6 +149,10 @@ set (EXAMPLE_DEFINE
 elseif(EXAMPLE_NAME STREQUAL DearIMGUI)
 set (EXAMPLE_DEFINE
 	DEAR_IMGUI_EXAMPLE=1
+)
+elseif(EXAMPLE_NAME STREQUAL Compute)
+set (EXAMPLE_DEFINE
+	COMPUTE_EXAMPLE=1
 )
 else()
 set (EXAMPLE_DEFINE
