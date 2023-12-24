@@ -3,16 +3,23 @@ engine6
 
 ## Base for future projects built on Vulkan and examples on how to use https://github.com/popescualexandrucristian/acp_vulkan
 
-* Simple example with data hardcoded in the shader.(when using cmake set EXAMPLE_NAME to Triange)
+* Simple example with data hardcoded in the shader.(when using cmake set EXAMPLE_NAME to Triange)\
+  https://raw.githubusercontent.com/popescualexandrucristian/engine6/main/src/renderer/vulkan/triangle.cpp \
   ![https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg](https://github.com/popescualexandrucristian/engine6/blob/main/docu/triangle.jpg)
-* Simple example with a quad displayed on the screen based on a vertex buffer and on an index buffer stored on the GPU.(when using cmake set EXAMPLE_NAME to Quad)
+* Simple example with a quad displayed on the screen based on a vertex buffer and on an index buffer stored on the GPU.(when using cmake set EXAMPLE_NAME to Quad)\
+  https://raw.githubusercontent.com/popescualexandrucristian/engine6/main/src/renderer/vulkan/quad_with_vertex_and_index.cpp \
   ![https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg](https://github.com/popescualexandrucristian/engine6/blob/main/docu/quad.jpg)
-* Simple example with a textured quad displayed on the screen based on a vertex buffer and on an index buffer stored on the GPU.
-  The texture is a dds.(when using cmake set EXAMPLE_NAME to TexturedQuad)  
+* Simple example with a textured quad displayed on the screen based on a vertex buffer and on an index buffer stored on the GPU.\
+  The texture is a dds.(when using cmake set EXAMPLE_NAME to TexturedQuad)\
+  https://raw.githubusercontent.com/popescualexandrucristian/engine6/main/src/renderer/vulkan/quad_with_vertex_index_and_texture.cpp \
   ![https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg](https://github.com/popescualexandrucristian/engine6/blob/main/docu/textured_quad.jpg)
-* Simple example on how to integrate dear IMGUI with this libraries. (Note: I am using a modified version that works with VMA and has some other improvements, see the readme there for details. The standard version also works) (when using cmake set EXAMPLE_NAME to DearIMGUI)  
+* Simple example on how to integrate dear IMGUI with this libraries.\
+  (Note: I am using a modified version that works with VMA and has some other improvements, see the readme there for details. The standard version also works)\
+  (when using cmake set EXAMPLE_NAME to DearIMGUI)\
+  https://raw.githubusercontent.com/popescualexandrucristian/engine6/main/src/renderer/vulkan/dear_imgui.cpp \
   ![https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg](https://github.com/popescualexandrucristian/engine6/blob/main/docu/imgui.jpg)
-* Simple example that uses compute. (when using cmake set EXAMPLE_NAME to Compute)
+* Simple example that uses compute. (when using cmake set EXAMPLE_NAME to Compute)\
+  https://raw.githubusercontent.com/popescualexandrucristian/engine6/main/src/renderer/vulkan/compute.cpp \
   ![https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg](https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg)
 
 ## Project generation
