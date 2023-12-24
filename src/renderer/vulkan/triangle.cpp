@@ -74,11 +74,11 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	user->program = acp_vulkan::graphics_program_init(
 		context->logical_device, context->host_allocator, 
 		{ user->vertex_shader, user->fragment_shader }, {}, 0, false, false, true, 1, 
-		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED);
+		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED, "triangle_pipeline");
 
 	for (size_t i = 0; i < context->max_frames; ++i)
 	{
-		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context));
+		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_command_pool"));
 		user->command_buffers.push_back(VK_NULL_HANDLE);
 	}
 

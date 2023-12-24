@@ -81,6 +81,10 @@
 #include <stdio.h>
 #include <vma/vk_mem_alloc.h>
 
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+#include "../acp_vulkan/acp_debug_vulkan.h"
+#endif
+
 // Visual Studio warnings
 #ifdef _MSC_VER
 #pragma warning (disable: 4127) // condition expression is constant
@@ -396,6 +400,9 @@ static void CreateOrResizeBuffer(VkBuffer& buffer, VmaAllocation& memory_allocat
     VmaAllocationCreateInfo vmaalloc_info = {};
     vmaalloc_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
     err = vmaCreateBuffer(v->GPUAllocator, &buffer_info, &vmaalloc_info, &buffer, &memory_allocation, nullptr);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+    acp_vulkan::debug_set_object_name(v->Device, buffer, VK_OBJECT_TYPE_BUFFER, "imgui_buffer");
+#endif
     check_vk_result(err);
 
     VkMemoryRequirements req;
@@ -604,6 +611,9 @@ bool ImGui_ImplVulkan_CreateFontsTexture()
         info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         info.queueFamilyIndex = v->QueueFamily;
         vkCreateCommandPool(v->Device, &info, v->Allocator, &bd->FontCommandPool);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(v->Device, bd->FontCommandPool, VK_OBJECT_TYPE_COMMAND_POOL, "imgui_font_command_pool");
+#endif
     }
 
     VkCommandBuffer fontCommandBuffer = VK_NULL_HANDLE;
@@ -652,6 +662,9 @@ bool ImGui_ImplVulkan_CreateFontsTexture()
         VmaAllocationCreateInfo vmaalloc_info = {};
         vmaalloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
         err = vmaCreateImage(v->GPUAllocator, &info, &vmaalloc_info, &bd->FontImage, &bd->FontAllocation, nullptr);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(v->Device, bd->FontImage, VK_OBJECT_TYPE_IMAGE, "imgui_font_image");
+#endif
         check_vk_result(err);
     }
 
@@ -666,6 +679,9 @@ bool ImGui_ImplVulkan_CreateFontsTexture()
         info.subresourceRange.levelCount = 1;
         info.subresourceRange.layerCount = 1;
         err = vkCreateImageView(v->Device, &info, v->Allocator, &bd->FontView);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(v->Device, bd->FontView, VK_OBJECT_TYPE_IMAGE_VIEW, "imgui_font_view");
+#endif
         check_vk_result(err);
     }
 
@@ -685,6 +701,9 @@ bool ImGui_ImplVulkan_CreateFontsTexture()
         VmaAllocationCreateInfo vmaalloc_info = {};
         vmaalloc_info.usage = VMA_MEMORY_USAGE_CPU_ONLY;
         err = vmaCreateBuffer(v->GPUAllocator, &buffer_info, &vmaalloc_info, &upload_buffer, &upload_buffer_allocation, nullptr);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(v->Device, upload_buffer, VK_OBJECT_TYPE_BUFFER, "imgui_fonts_transfer_buffer");
+#endif
 
         VkMemoryRequirements req;
         vkGetBufferMemoryRequirements(v->Device, upload_buffer, &req);
@@ -792,6 +811,9 @@ static void ImGui_ImplVulkan_CreateShaderModules(VkDevice device, const VkAlloca
         vert_info.pCode = vert_data;
         VkResult err = vkCreateShaderModule(device, &vert_info, allocator, &bd->ShaderModuleVert);
         check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(device, bd->ShaderModuleVert, VK_OBJECT_TYPE_SHADER_MODULE, "imgui_shader_vertx");
+#endif
     }
     if (bd->ShaderModuleFrag == VK_NULL_HANDLE)
     {
@@ -801,6 +823,9 @@ static void ImGui_ImplVulkan_CreateShaderModules(VkDevice device, const VkAlloca
         frag_info.pCode = frag_data;
         VkResult err = vkCreateShaderModule(device, &frag_info, allocator, &bd->ShaderModuleFrag);
         check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(device, bd->ShaderModuleFrag, VK_OBJECT_TYPE_SHADER_MODULE, "imgui_shader_frag");
+#endif
     }
 }
 
@@ -921,6 +946,9 @@ static void ImGui_ImplVulkan_CreatePipeline(VkDevice device, const VkAllocationC
 #endif
 
     VkResult err = vkCreateGraphicsPipelines(device, pipelineCache, 1, &info, allocator, pipeline);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+    acp_vulkan::debug_set_object_name(device, *pipeline, VK_OBJECT_TYPE_PIPELINE, "imgui_pipeline");
+#endif
     check_vk_result(err);
 }
 
@@ -946,6 +974,9 @@ bool ImGui_ImplVulkan_CreateDeviceObjects()
         info.maxAnisotropy = 1.0f;
         err = vkCreateSampler(v->Device, &info, v->Allocator, &bd->FontSampler);
         check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(v->Device, bd->FontSampler, VK_OBJECT_TYPE_SAMPLER, "imgui_sampler");
+#endif
     }
 
     if (!bd->DescriptorSetLayout)
@@ -960,6 +991,9 @@ bool ImGui_ImplVulkan_CreateDeviceObjects()
         info.pBindings = binding;
         err = vkCreateDescriptorSetLayout(v->Device, &info, v->Allocator, &bd->DescriptorSetLayout);
         check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(v->Device, bd->DescriptorSetLayout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "imgui_set_layout");
+#endif
     }
 
     if (!bd->PipelineLayout)
@@ -978,6 +1012,9 @@ bool ImGui_ImplVulkan_CreateDeviceObjects()
         layout_info.pPushConstantRanges = push_constants;
         err = vkCreatePipelineLayout(v->Device, &layout_info, v->Allocator, &bd->PipelineLayout);
         check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(v->Device, bd->PipelineLayout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, "imgui_pipeline_layout");
+#endif
     }
 
     ImGui_ImplVulkan_CreatePipeline(v->Device, v->Allocator, v->PipelineCache, bd->RenderPass, v->MSAASamples, &bd->Pipeline, bd->Subpass);
@@ -1272,6 +1309,9 @@ void ImGui_ImplVulkanH_CreateWindowCommandBuffers(VkPhysicalDevice physical_devi
             info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
             info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
             err = vkCreateFence(device, &info, allocator, &fd->Fence);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+            acp_vulkan::debug_set_object_name(device, fd->Fence, VK_OBJECT_TYPE_FENCE, "imgui_window_fences");
+#endif
             check_vk_result(err);
         }
         {
@@ -1279,8 +1319,14 @@ void ImGui_ImplVulkanH_CreateWindowCommandBuffers(VkPhysicalDevice physical_devi
             info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
             err = vkCreateSemaphore(device, &info, allocator, &fsd->ImageAcquiredSemaphore);
             check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+            acp_vulkan::debug_set_object_name(device, fsd->ImageAcquiredSemaphore, VK_OBJECT_TYPE_SEMAPHORE, "imgui_window_acquire_semaphore");
+#endif
             err = vkCreateSemaphore(device, &info, allocator, &fsd->RenderCompleteSemaphore);
             check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+            acp_vulkan::debug_set_object_name(device, fsd->RenderCompleteSemaphore, VK_OBJECT_TYPE_FENCE, "imgui_window_complete_semaphore");
+#endif
         }
     }
 }
@@ -1362,6 +1408,9 @@ void ImGui_ImplVulkanH_CreateWindowSwapChain(VkPhysicalDevice physical_device, V
             info.imageExtent.height = wd->Height = cap.currentExtent.height;
         }
         err = vkCreateSwapchainKHR(device, &info, allocator, &wd->Swapchain);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(device, wd->Swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR, "imgui_swapchain");
+#endif
         check_vk_result(err);
         err = vkGetSwapchainImagesKHR(device, wd->Swapchain, &wd->ImageCount, nullptr);
         check_vk_result(err);
@@ -1417,6 +1466,9 @@ void ImGui_ImplVulkanH_CreateWindowSwapChain(VkPhysicalDevice physical_device, V
         info.dependencyCount = 1;
         info.pDependencies = &dependency;
         err = vkCreateRenderPass(device, &info, allocator, &wd->RenderPass);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+        acp_vulkan::debug_set_object_name(device, wd->RenderPass, VK_OBJECT_TYPE_RENDER_PASS, "imgui_render_pass");
+#endif
         check_vk_result(err);
 
         // We do not create a pipeline by default as this is also used by examples' main.cpp,
@@ -1442,6 +1494,9 @@ void ImGui_ImplVulkanH_CreateWindowSwapChain(VkPhysicalDevice physical_device, V
             info.image = fd->Backbuffer;
             err = vkCreateImageView(device, &info, allocator, &fd->BackbufferView);
             check_vk_result(err);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+            acp_vulkan::debug_set_object_name(device, fd->BackbufferView, VK_OBJECT_TYPE_IMAGE_VIEW, "imgui_backbuffer_view");
+#endif
         }
     }
 
@@ -1462,6 +1517,9 @@ void ImGui_ImplVulkanH_CreateWindowSwapChain(VkPhysicalDevice physical_device, V
             ImGui_ImplVulkanH_Frame* fd = &wd->Frames[i];
             attachment[0] = fd->BackbufferView;
             err = vkCreateFramebuffer(device, &info, allocator, &fd->Framebuffer);
+#ifdef ENABLE_VULKAN_DEBUG_MARKERS
+            acp_vulkan::debug_set_object_name(device, fd->Framebuffer, VK_OBJECT_TYPE_FRAMEBUFFER, "imgui_framebuffer");
+#endif
             check_vk_result(err);
         }
     }

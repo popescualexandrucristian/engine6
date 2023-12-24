@@ -96,11 +96,11 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	user->program = acp_vulkan::graphics_program_init(
 		context->logical_device, context->host_allocator,
 		{ user->vertex_shader, user->fragment_shader }, { vertex_shader_input_attributes }, 0, true, true, true, 1,
-		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED);
+		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED, "quad_pipeline");
 
 	for (size_t i = 0; i < context->max_frames; ++i)
 	{
-		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context));
+		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_command_pool"));
 		user->command_buffers.push_back(VK_NULL_HANDLE);
 	}
 
@@ -113,8 +113,8 @@ static bool user_init(acp_vulkan::renderer_context* context)
 
 	uint16_t index_data[6] = { 0,1,2,2,3,0 };
 
-	user->vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(user_data::vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-	user->index_data = acp_vulkan::upload_data(context, index_data, 6, sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	user->vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(user_data::vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, "user_vertex_data");
+	user->index_data = acp_vulkan::upload_data(context, index_data, 6, sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, "user_index_data");
 	return true;
 }
 

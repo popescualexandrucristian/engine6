@@ -206,22 +206,22 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	user->graphics_program = acp_vulkan::graphics_program_init(
 		context->logical_device, context->host_allocator, 
 		{ user->vertex_shader, user->fragment_shader }, { particle_model_attributes, particle_attributes}, 0, true, true, true, 1, 
-		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED);
+		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED, "compute_example_graphics_pipeline");
 
 	user->compute_shader = acp_vulkan::shader_init(context->logical_device, context->host_allocator, "./shaders/particle.comp.spv");
 
-	user->compute_program = acp_vulkan::compute_program_init(context->logical_device, context->host_allocator, user->compute_shader, 0, true);
+	user->compute_program = acp_vulkan::compute_program_init(context->logical_device, context->host_allocator, user->compute_shader, 0, true, "compute_example_compute_pipeline");
 
 	for (size_t i = 0; i < context->max_frames; ++i)
 	{
-		user->graphics_commands_pools.push_back(acp_vulkan::commands_pool_crate(context));
+		user->graphics_commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_graphics_command_pools"));
 		user->graphics_command_buffers.push_back(VK_NULL_HANDLE);
 
-		user->compute_commands_pools.push_back(acp_vulkan::commands_pool_crate(context));
+		user->compute_commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_compute_command_pools"));
 		user->compute_command_buffers.push_back(VK_NULL_HANDLE);
 
-		user->graphics_descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128));
-		user->compute_descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128));
+		user->graphics_descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128, "user_graphics_descriptor_pools"));
+		user->compute_descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128, "user_compute_descriptor_pools"));
 	}
 
 	acp_vulkan_os_specific_width_and_height width_and_height = acp_vulkan_os_specific_get_width_and_height();
@@ -234,8 +234,8 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		{.position = {  0.5f,  0.5f / aspect_ratio, 0.0f}}
 	};
 	uint16_t index_data[6] = { 0,1,2,2,3,0 };
-	user->particle_model_vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(compute_user_data::particle_model_vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-	user->particle_model_index_data = acp_vulkan::upload_data(context, index_data, 6, sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	user->particle_model_vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(compute_user_data::particle_model_vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, "user_particle_model_vertex_data");
+	user->particle_model_index_data = acp_vulkan::upload_data(context, index_data, 6, sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, "user_particle_model_index_data");
 
 	for (size_t i = 0; i < context->max_frames; ++i)
 	{
@@ -297,7 +297,7 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	
 	for (size_t i = 0; i < context->max_frames; ++i)
 		user->particles.push_back(acp_vulkan::upload_data(context, init_particle_data.data(), uint32_t(init_particle_data.size()), sizeof(compute_user_data::particle),
-			VkBufferUsageFlagBits(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)));
+			VkBufferUsageFlagBits(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT), "user_particles"));
 
 	return true;
 }

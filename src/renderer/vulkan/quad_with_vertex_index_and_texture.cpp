@@ -109,13 +109,13 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	user->program = acp_vulkan::graphics_program_init(
 		context->logical_device, context->host_allocator, 
 		{ user->vertex_shader, user->fragment_shader }, { vertex_shader_input_attributes }, 0, true, true, true, 1, 
-		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED);
+		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED, "quad_with_texture_pipeline");
 
 	for (size_t i = 0; i < context->max_frames; ++i)
 	{
-		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context));
+		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_command_pools"));
 		user->command_buffers.push_back(VK_NULL_HANDLE);
-		user->descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128));
+		user->descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128, "user_descriptors"));
 	}
 
 	quad_with_texture_user_data::vertex verts_data[4] = {
@@ -127,8 +127,8 @@ static bool user_init(acp_vulkan::renderer_context* context)
 
 	uint16_t index_data[6] = { 0,1,2,2,3,0 };
 
-	user->vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(quad_with_texture_user_data::vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-	user->index_data = acp_vulkan::upload_data(context, index_data, 6, sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+	user->vertex_data = acp_vulkan::upload_data(context, verts_data, 4, sizeof(quad_with_texture_user_data::vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, "user_vertex_data");
+	user->index_data = acp_vulkan::upload_data(context, index_data, 6, sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, "user_index_data");
 
 	user->descriptor_set_resources = VK_NULL_HANDLE;
 	VkDescriptorSetAllocateInfo descriptor_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
@@ -137,10 +137,10 @@ static bool user_init(acp_vulkan::renderer_context* context)
 	descriptor_info.pSetLayouts = &user->program->descriptor_layouts[0].first;
 	ACP_VK_CHECK(vkAllocateDescriptorSets(context->logical_device, &descriptor_info, &user->descriptor_set_resources), context);
 
-	user->sampler = acp_vulkan::create_linear_sampler(context);
+	user->sampler = acp_vulkan::create_linear_sampler(context, "user_linear_sampler");
 
 	acp_vulkan::dds_data dds_data = acp_vulkan::dds_data_from_file("./textures/test.dds", context->host_allocator);
-	user->image = acp_vulkan::upload_image(context, dds_data.image_mip_data, dds_data.image_create_info);
+	user->image = acp_vulkan::upload_image(context, dds_data.image_mip_data, dds_data.image_create_info, "test.dds");
 
 	VkImageViewCreateInfo image_view_info = acp_vulkan::dds_data_create_view_info(&dds_data, user->image.image);
 	vkCreateImageView(context->logical_device, &image_view_info, context->host_allocator, &user->image_view);
