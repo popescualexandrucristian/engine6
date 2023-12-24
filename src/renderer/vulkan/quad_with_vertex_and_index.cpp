@@ -75,7 +75,7 @@ static bool user_update(acp_vulkan::renderer_context* context, size_t current_fr
 
 	vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 
-	acp_vulkan::renderer_end_main_pass(command_buffer, context);
+	acp_vulkan::renderer_end_main_pass(command_buffer, context, false);
 	return true;
 }
 
@@ -98,7 +98,7 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		{ user->vertex_shader, user->fragment_shader }, { vertex_shader_input_attributes }, 0, true, true, true, 1,
 		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED);
 
-	for (size_t i = 0; i < context->frame_syncs.size(); ++i)
+	for (size_t i = 0; i < context->max_frames; ++i)
 	{
 		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context));
 		user->command_buffers.push_back(VK_NULL_HANDLE);
