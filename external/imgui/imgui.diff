@@ -10,33 +10,37 @@ diff -r imgui-master/LICENSE.txt imgui/LICENSE.txt
 > See imgui.diff for details.
 \ No newline at end of file
 diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vulkan.cpp
-81a82
+81a82,86
 > #include <vma/vk_mem_alloc.h>
-92,95d92
+> 
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+> #include "../acp_vulkan/acp_debug_vulkan.h"
+> #endif
+92,95d96
 <     VkDeviceMemory      VertexBufferMemory;
 <     VkDeviceMemory      IndexBufferMemory;
 <     VkDeviceSize        VertexBufferSize;
 <     VkDeviceSize        IndexBufferSize;
-97a95,98
+97a99,102
 >     VmaAllocation       VertexBufferAllocation;
 >     VmaAllocation       IndexBufferAllocation;
 >     VkDeviceSize        VertexBufferSize;
 >     VkDeviceSize        IndexBufferSize;
-125c126
+125c130
 <     VkDeviceMemory              FontMemory;
 ---
 >     VmaAllocation               FontAllocation;
-130d130
+130d134
 <     VkCommandBuffer             FontCommandBuffer;
-143c143
+143c147
 < bool ImGui_ImplVulkan_CreateDeviceObjects();
 ---
 > bool ImGui_ImplVulkan_CreateDeviceObjects(uint32_t* vert_data, size_t vert_size, uint32_t* frag_data, size_t frag_size);
-381c381
+381c385
 < static void CreateOrResizeBuffer(VkBuffer& buffer, VkDeviceMemory& buffer_memory, VkDeviceSize& p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage)
 ---
 > static void CreateOrResizeBuffer(VkBuffer& buffer, VmaAllocation& memory_allocation, VkDeviceSize& p_buffer_size, size_t new_size, VkBufferUsageFlagBits usage)
-387,390c387,388
+387,390c391,392
 <         vkDestroyBuffer(v->Device, buffer, v->Allocator);
 <     if (buffer_memory != VK_NULL_HANDLE)
 <         vkFreeMemory(v->Device, buffer_memory, v->Allocator);
@@ -44,40 +48,43 @@ diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vu
 ---
 >         vmaDestroyBuffer(v->GPUAllocator, buffer, memory_allocation);
 >         
-397c395,398
+397c399,405
 <     err = vkCreateBuffer(v->Device, &buffer_info, v->Allocator, &buffer);
 ---
 > 
 >     VmaAllocationCreateInfo vmaalloc_info = {};
 >     vmaalloc_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 >     err = vmaCreateBuffer(v->GPUAllocator, &buffer_info, &vmaalloc_info, &buffer, &memory_allocation, nullptr);
-403,408d403
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>     acp_vulkan::debug_set_object_name(v->Device, buffer, VK_OBJECT_TYPE_BUFFER, "imgui_buffer");
+> #endif
+403,408d410
 <     VkMemoryAllocateInfo alloc_info = {};
 <     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 <     alloc_info.allocationSize = req.size;
 <     alloc_info.memoryTypeIndex = ImGui_ImplVulkan_MemoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
 <     err = vkAllocateMemory(v->Device, &alloc_info, v->Allocator, &buffer_memory);
 <     check_vk_result(err);
-410,411d404
+410,411d411
 <     err = vkBindBufferMemory(v->Device, buffer, buffer_memory, 0);
 <     check_vk_result(err);
-492c485
+492c492
 <             CreateOrResizeBuffer(rb->VertexBuffer, rb->VertexBufferMemory, rb->VertexBufferSize, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 ---
 >             CreateOrResizeBuffer(rb->VertexBuffer, rb->VertexBufferAllocation, rb->VertexBufferSize, vertex_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-494c487
+494c494
 <             CreateOrResizeBuffer(rb->IndexBuffer, rb->IndexBufferMemory, rb->IndexBufferSize, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 ---
 >             CreateOrResizeBuffer(rb->IndexBuffer, rb->IndexBufferAllocation, rb->IndexBufferSize, index_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-499c492
+499c499
 <         VkResult err = vkMapMemory(v->Device, rb->VertexBufferMemory, 0, rb->VertexBufferSize, 0, (void**)(&vtx_dst));
 ---
 >         VkResult err = vmaMapMemory(v->GPUAllocator,rb->VertexBufferAllocation, (void**)(&vtx_dst));
-501c494
+501c501
 <         err = vkMapMemory(v->Device, rb->IndexBufferMemory, 0, rb->IndexBufferSize, 0, (void**)(&idx_dst));
 ---
 >         err = vmaMapMemory(v->GPUAllocator, rb->IndexBufferAllocation, (void**)(&idx_dst));
-511,521c504,506
+511,521c511,513
 <         VkMappedMemoryRange range[2] = {};
 <         range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 <         range[0].memory = rb->VertexBufferMemory;
@@ -93,26 +100,30 @@ diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vu
 > 
 >         vmaUnmapMemory(v->GPUAllocator, rb->VertexBufferAllocation);
 >         vmaUnmapMemory(v->GPUAllocator, rb->IndexBufferAllocation);
-609c594
+609c601
 <     if (bd->FontView || bd->FontImage || bd->FontMemory || bd->FontDescriptorSet)
 ---
 >     if (bd->FontView || bd->FontImage || bd->FontAllocation || bd->FontDescriptorSet)
-620d604
+620d611
 <         info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-624c608,609
+622a614,616
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(v->Device, bd->FontCommandPool, VK_OBJECT_TYPE_COMMAND_POOL, "imgui_font_command_pool");
+> #endif
+624c618,619
 <     if (bd->FontCommandBuffer == VK_NULL_HANDLE)
 ---
 > 
 >     VkCommandBuffer fontCommandBuffer = VK_NULL_HANDLE;
-630c615
+630c625
 <         err = vkAllocateCommandBuffers(v->Device, &info, &bd->FontCommandBuffer);
 ---
 >         err = vkAllocateCommandBuffers(v->Device, &info, &fontCommandBuffer);
-641c626
+641c636
 <         err = vkBeginCommandBuffer(bd->FontCommandBuffer, &begin_info);
 ---
 >         err = vkBeginCommandBuffer(fontCommandBuffer, &begin_info);
-666,676c651,654
+666,676c661,667
 <         err = vkCreateImage(v->Device, &info, v->Allocator, &bd->FontImage);
 <         check_vk_result(err);
 <         VkMemoryRequirements req;
@@ -129,11 +140,18 @@ diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vu
 >         VmaAllocationCreateInfo vmaalloc_info = {};
 >         vmaalloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 >         err = vmaCreateImage(v->GPUAllocator, &info, &vmaalloc_info, &bd->FontImage, &bd->FontAllocation, nullptr);
-698c676
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(v->Device, bd->FontImage, VK_OBJECT_TYPE_IMAGE, "imgui_font_image");
+> #endif
+690a682,684
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(v->Device, bd->FontView, VK_OBJECT_TYPE_IMAGE_VIEW, "imgui_font_view");
+> #endif
+698c692
 <     VkDeviceMemory upload_buffer_memory;
 ---
 >     VmaAllocation upload_buffer_allocation;
-706,707c684,688
+706,707c700,707
 <         err = vkCreateBuffer(v->Device, &buffer_info, v->Allocator, &upload_buffer);
 <         check_vk_result(err);
 ---
@@ -141,8 +159,11 @@ diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vu
 >         VmaAllocationCreateInfo vmaalloc_info = {};
 >         vmaalloc_info.usage = VMA_MEMORY_USAGE_CPU_ONLY;
 >         err = vmaCreateBuffer(v->GPUAllocator, &buffer_info, &vmaalloc_info, &upload_buffer, &upload_buffer_allocation, nullptr);
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(v->Device, upload_buffer, VK_OBJECT_TYPE_BUFFER, "imgui_fonts_transfer_buffer");
+> #endif
 > 
-711,717c692
+711,717c711
 <         VkMemoryAllocateInfo alloc_info = {};
 <         alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 <         alloc_info.allocationSize = req.size;
@@ -152,11 +173,11 @@ diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vu
 <         err = vkBindBufferMemory(v->Device, upload_buffer, upload_buffer_memory, 0);
 ---
 > 
-724c699
+724c718
 <         err = vkMapMemory(v->Device, upload_buffer_memory, 0, upload_size, 0, (void**)(&map));
 ---
 >         err = vmaMapMemory(v->GPUAllocator, upload_buffer_allocation, (void**)(&map));
-727,733c702
+727,733c721
 <         VkMappedMemoryRange range[1] = {};
 <         range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 <         range[0].memory = upload_buffer_memory;
@@ -166,25 +187,25 @@ diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vu
 <         vkUnmapMemory(v->Device, upload_buffer_memory);
 ---
 >         vmaUnmapMemory(v->GPUAllocator, upload_buffer_allocation);
-749c718
+749c737
 <         vkCmdPipelineBarrier(bd->FontCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, copy_barrier);
 ---
 >         vkCmdPipelineBarrier(fontCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, copy_barrier);
-757c726
+757c745
 <         vkCmdCopyBufferToImage(bd->FontCommandBuffer, upload_buffer, bd->FontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 ---
 >         vkCmdCopyBufferToImage(fontCommandBuffer, upload_buffer, bd->FontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-771c740
+771c759
 <         vkCmdPipelineBarrier(bd->FontCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, use_barrier);
 ---
 >         vkCmdPipelineBarrier(fontCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, use_barrier);
-781,782c750,751
+781,782c769,770
 <     end_info.pCommandBuffers = &bd->FontCommandBuffer;
 <     err = vkEndCommandBuffer(bd->FontCommandBuffer);
 ---
 >     end_info.pCommandBuffers = &fontCommandBuffer;
 >     err = vkEndCommandBuffer(fontCommandBuffer);
-790,792c759,761
+790,792c778,780
 <     vkDestroyBuffer(v->Device, upload_buffer, v->Allocator);
 <     vkFreeMemory(v->Device, upload_buffer_memory, v->Allocator);
 < 
@@ -192,56 +213,108 @@ diff -r imgui-master/backends/imgui_impl_vulkan.cpp imgui/backends/imgui_impl_vu
 >     vmaDestroyBuffer(v->GPUAllocator, upload_buffer, upload_buffer_allocation);
 >     vkFreeCommandBuffers(v->Device, bd->FontCommandPool, 1, &fontCommandBuffer);
 >     vkResetCommandPool(v->Device, bd->FontCommandPool, 0);
-811,812c780
+811,812c799
 <     if (bd->FontImage)  { vkDestroyImage(v->Device, bd->FontImage, v->Allocator); bd->FontImage = VK_NULL_HANDLE; }
 <     if (bd->FontMemory) { vkFreeMemory(v->Device, bd->FontMemory, v->Allocator); bd->FontMemory = VK_NULL_HANDLE; }
 ---
 >     if (bd->FontImage || bd->FontAllocation) { vmaDestroyImage(v->GPUAllocator, bd->FontImage, bd->FontAllocation); bd->FontImage = VK_NULL_HANDLE; bd->FontAllocation = nullptr; }
-815c783
+815c802
 < static void ImGui_ImplVulkan_CreateShaderModules(VkDevice device, const VkAllocationCallbacks* allocator)
 ---
 > static void ImGui_ImplVulkan_CreateShaderModules(VkDevice device, const VkAllocationCallbacks* allocator, uint32_t* vert_data, size_t vert_size, uint32_t* frag_data, size_t frag_size)
-823,824c791,792
+823,824c810,811
 <         vert_info.codeSize = sizeof(__glsl_shader_vert_spv);
 <         vert_info.pCode = (uint32_t*)__glsl_shader_vert_spv;
 ---
 >         vert_info.codeSize = vert_size * sizeof(uint32_t);
 >         vert_info.pCode = vert_data;
-832,833c800,801
+826a814,816
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(device, bd->ShaderModuleVert, VK_OBJECT_TYPE_SHADER_MODULE, "imgui_shader_vertx");
+> #endif
+832,833c822,823
 <         frag_info.codeSize = sizeof(__glsl_shader_frag_spv);
 <         frag_info.pCode = (uint32_t*)__glsl_shader_frag_spv;
 ---
 >         frag_info.codeSize = frag_size * sizeof(uint32_t);
 >         frag_info.pCode = frag_data;
-842c810,812
+835a826,828
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(device, bd->ShaderModuleFrag, VK_OBJECT_TYPE_SHADER_MODULE, "imgui_shader_frag");
+> #endif
+842c835,837
 <     ImGui_ImplVulkan_CreateShaderModules(device, allocator);
 ---
 > 
 >     ImGui_ImplVulkan_InitInfo* v = &bd->VulkanInitInfo;
 >     ImGui_ImplVulkan_CreateShaderModules(device, allocator, v->VertData, v->VertSize, v->FragData, v->FragSize);
-944a915
+944a940
 >     pipelineRenderingCreateInfo.depthAttachmentFormat = bd->VulkanInitInfo.DepthAttachmentFormat;
-1024d994
+952a949,951
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>     acp_vulkan::debug_set_object_name(device, *pipeline, VK_OBJECT_TYPE_PIPELINE, "imgui_pipeline");
+> #endif
+977a977,979
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(v->Device, bd->FontSampler, VK_OBJECT_TYPE_SAMPLER, "imgui_sampler");
+> #endif
+991a994,996
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(v->Device, bd->DescriptorSetLayout, VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "imgui_set_layout");
+> #endif
+1009a1015,1017
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(v->Device, bd->PipelineLayout, VK_OBJECT_TYPE_PIPELINE_LAYOUT, "imgui_pipeline_layout");
+> #endif
+1024d1031
 <     if (bd->FontCommandBuffer)    { vkFreeCommandBuffers(v->Device, bd->FontCommandPool, 1, &bd->FontCommandBuffer); bd->FontCommandBuffer = VK_NULL_HANDLE; }
-1288,1289c1258,1259
+1288,1289c1295,1296
 <             err = vkCreateCommandPool(device, &info, allocator, &fd->CommandPool);
 <             check_vk_result(err);
 ---
 >             //err = vkCreateCommandPool(device, &info, allocator, &fd->CommandPool);
 >             //check_vk_result(err);
-1297,1298c1267,1268
+1297,1298c1304,1305
 <             err = vkAllocateCommandBuffers(device, &info, &fd->CommandBuffer);
 <             check_vk_result(err);
 ---
 >             //err = vkAllocateCommandBuffers(device, &info, &fd->CommandBuffer);
 >             //check_vk_result(err);
-1534,1535c1504,1505
+1304a1312,1314
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>             acp_vulkan::debug_set_object_name(device, fd->Fence, VK_OBJECT_TYPE_FENCE, "imgui_window_fences");
+> #endif
+1311a1322,1324
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>             acp_vulkan::debug_set_object_name(device, fsd->ImageAcquiredSemaphore, VK_OBJECT_TYPE_SEMAPHORE, "imgui_window_acquire_semaphore");
+> #endif
+1313a1327,1329
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>             acp_vulkan::debug_set_object_name(device, fsd->RenderCompleteSemaphore, VK_OBJECT_TYPE_FENCE, "imgui_window_complete_semaphore");
+> #endif
+1394a1411,1413
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(device, wd->Swapchain, VK_OBJECT_TYPE_SWAPCHAIN_KHR, "imgui_swapchain");
+> #endif
+1449a1469,1471
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>         acp_vulkan::debug_set_object_name(device, wd->RenderPass, VK_OBJECT_TYPE_RENDER_PASS, "imgui_render_pass");
+> #endif
+1474a1497,1499
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>             acp_vulkan::debug_set_object_name(device, fd->BackbufferView, VK_OBJECT_TYPE_IMAGE_VIEW, "imgui_backbuffer_view");
+> #endif
+1494a1520,1522
+> #ifdef ENABLE_VULKAN_DEBUG_MARKERS
+>             acp_vulkan::debug_set_object_name(device, fd->Framebuffer, VK_OBJECT_TYPE_FRAMEBUFFER, "imgui_framebuffer");
+> #endif
+1534,1535c1562,1563
 <     vkFreeCommandBuffers(device, fd->CommandPool, 1, &fd->CommandBuffer);
 <     vkDestroyCommandPool(device, fd->CommandPool, allocator);
 ---
 >     //vkFreeCommandBuffers(device, fd->CommandPool, 1, &fd->CommandBuffer);
 >     //vkDestroyCommandPool(device, fd->CommandPool, allocator);
-1553,1556c1523,1535
+1553,1556c1581,1593
 <     if (buffers->VertexBuffer) { vkDestroyBuffer(device, buffers->VertexBuffer, allocator); buffers->VertexBuffer = VK_NULL_HANDLE; }
 <     if (buffers->VertexBufferMemory) { vkFreeMemory(device, buffers->VertexBufferMemory, allocator); buffers->VertexBufferMemory = VK_NULL_HANDLE; }
 <     if (buffers->IndexBuffer) { vkDestroyBuffer(device, buffers->IndexBuffer, allocator); buffers->IndexBuffer = VK_NULL_HANDLE; }
@@ -272,14 +345,17 @@ diff -r imgui-master/backends/imgui_impl_vulkan.h imgui/backends/imgui_impl_vulk
 >     size_t VertSize;
 >     uint32_t* VertData;
 diff -r imgui-master/docs/README.md imgui/docs/README.md
-0a1,8
-> This is not the original version of the library for that please visit https://github.com/ocornut/imgui/commit/f039e69b9cb3434eb1bdfc764cb2b37afe50d275
+0a1,12
+> Warning
+> =====
+> This is not the original version of the library for that please visit :
+> https://github.com/ocornut/imgui/commit/f039e69b9cb3434eb1bdfc764cb2b37afe50d275
+> 
 > This is a modified version by Popescu Alexandru-Cristian(popescualexandrucristian@gmail.com) 
-> 	- it uses VMA for memory allocations.
-> 	- fixes some issues that I had with dynamic rendering.
-> 	- it uses shaders from the target program where it is deployed.
+> * it uses VMA for memory allocations.
+> * fixes some issues that I had with dynamic rendering.
+> * it uses shaders from the target program where it is deployed.
 > 
 > See https://github.com/popescualexandrucristian/engine6/raw/main/external/imgui/imgui.diff for details.
 > 
 Only in imgui-master: examples
-Only in imgui: imgui.diff
