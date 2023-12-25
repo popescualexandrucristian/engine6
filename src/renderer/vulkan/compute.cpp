@@ -214,10 +214,10 @@ static bool user_init(acp_vulkan::renderer_context* context)
 
 	for (size_t i = 0; i < context->max_frames; ++i)
 	{
-		user->graphics_commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_graphics_command_pools"));
+		user->graphics_commands_pools.push_back(acp_vulkan::commands_pool_crate(context, context->graphics_family_index, "user_graphics_command_pools"));
 		user->graphics_command_buffers.push_back(VK_NULL_HANDLE);
 
-		user->compute_commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_compute_command_pools"));
+		user->compute_commands_pools.push_back(acp_vulkan::commands_pool_crate(context, context->compute_family_index, "user_compute_command_pools"));
 		user->compute_command_buffers.push_back(VK_NULL_HANDLE);
 
 		user->graphics_descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128, "user_graphics_descriptor_pools"));

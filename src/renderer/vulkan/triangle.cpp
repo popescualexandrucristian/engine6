@@ -78,7 +78,7 @@ static bool user_init(acp_vulkan::renderer_context* context)
 
 	for (size_t i = 0; i < context->max_frames; ++i)
 	{
-		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context, "user_command_pool"));
+		user->commands_pools.push_back(acp_vulkan::commands_pool_crate(context, context->graphics_family_index, "user_command_pool"));
 		user->command_buffers.push_back(VK_NULL_HANDLE);
 	}
 
