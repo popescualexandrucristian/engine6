@@ -11,6 +11,7 @@
 #include <quad_with_vertex_index_and_texture.h>
 #include <dear_imgui.h>
 #include <compute.h>
+#include <gltf.h>
 
 #include <acp_context/acp_vulkan_context.h>
 #include <imgui.h>
@@ -156,8 +157,10 @@ int APIENTRY WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nS
 	render_context = init_imgui_render_context();
 #elif COMPUTE_EXAMPLE
 	render_context = init_compute_render_context();
+#elif GLTF_EXAMPLE
+	render_context = init_gltf_loader_render_context();
 #else
-#error No example selected please set the define for one of them.
+	#error No example selected please set the define for one of them.
 #endif
 	if (!render_context)
 	{
