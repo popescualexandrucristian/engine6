@@ -21,6 +21,10 @@ engine6
 * Simple example that uses compute. (when using cmake set EXAMPLE_NAME to Compute)\
   https://raw.githubusercontent.com/popescualexandrucristian/engine6/main/src/renderer/vulkan/compute.cpp \
   ![https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg](https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg)
+* Simple example that uses tiny gltf to load a model. (when using cmake set EXAMPLE_NAME to GLTF)\
+  https://raw.githubusercontent.com/popescualexandrucristian/engine6/main/src/renderer/vulkan/gltf.cpp \
+  ![https://github.com/popescualexandrucristian/engine6/blob/main/docu/compute.jpg](https://github.com/popescualexandrucristian/engine6/blob/main/docu/tiny_gltf.jpg)
+
 
 ## Project generation
 cmake -G "Visual Studio 17 2022" -DEXAMPLE_NAME=Compute
