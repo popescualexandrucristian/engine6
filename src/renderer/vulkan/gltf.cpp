@@ -167,7 +167,7 @@ static bool user_init(acp_vulkan::renderer_context* context)
 			char texture_buffer_path[256];
 			sprintf(texture_buffer_path, "%s/%s", texture_prefix, texture_name.c_str());
 			acp_vulkan::dds_data dds_data = acp_vulkan::dds_data_from_file(texture_buffer_path, context->host_allocator);
-			texture = acp_vulkan::upload_image(context, dds_data.image_mip_data, dds_data.image_create_info, "test.dds");
+			texture = acp_vulkan::upload_image(context, dds_data.image_mip_data, dds_data.image_create_info, texture_buffer_path);
 			VkImageViewCreateInfo image_view_info = acp_vulkan::dds_data_create_view_info(&dds_data, texture.image);
 			vkCreateImageView(context->logical_device, &image_view_info, context->host_allocator, &texture_view);
 			acp_vulkan::dds_data_free(&dds_data, context->host_allocator);
