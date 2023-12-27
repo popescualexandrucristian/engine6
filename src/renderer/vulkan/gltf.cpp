@@ -5,10 +5,6 @@
 #include <acp_context/acp_vulkan_context_utils.h>
 #include <acp_context/acp_vulkan_context_swapchain.h>
 
-#include <imgui.h>
-#include <backends/imgui_impl_vulkan.h>
-#include <backends/imgui_impl_win32.h>
-
 #include <utils.h>
 
 #include <tiny_gltf.h>
@@ -24,31 +20,23 @@ struct gltf_user_context
 
 	acp_vulkan::buffer_data	model_vertex_data;
 	acp_vulkan::buffer_data	model_index_data;
-	acp_vulkan::image_data	model_texture;
-	VkImageView				model_texture_view;
-	VkSampler				model_texture_sampler;
+	uint32_t model_index_count;
+	acp_vulkan::image_data	model_color_texture;
+	VkImageView				model_color_texture_view;
+	VkSampler				model_color_texture_sampler;
 	VkDescriptorSet			model_descriptors;
 
 	struct model_vertex
 	{
 		float uv[2];
 		float padding[2];
-		float normal[3];
-		float padding_1;
-		float tangent[4];
 		float position[3];
-		float padding_2;
+		float padding_1;
 	};
 };
 
 static bool user_update(acp_vulkan::renderer_context* context, size_t current_frame, VkRenderingAttachmentInfo color_attachment, VkRenderingAttachmentInfo depth_attachment, double)
 {
-#ifdef _WIN32
-	ImGui_ImplWin32_NewFrame();
-#else
-#error Not implemented for this platform.
-#endif
-
 	gltf_user_context* user = reinterpret_cast<gltf_user_context*>(context->user_context.user_data);
 
 	if (user->command_buffers[current_frame] != VK_NULL_HANDLE)
@@ -89,125 +77,16 @@ static bool user_update(acp_vulkan::renderer_context* context, size_t current_fr
 	vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 	vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-	ImGui::NewFrame();
-	bool show = true;
-	ImGui::ShowDemoWindow(&show);
-	ImGui::EndFrame();
-	ImGui::Render();
+	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, user->program->pipeline);
+	VkDeviceSize offset = 0;
+	vkCmdBindVertexBuffers(command_buffer, 0, 1, &user->model_vertex_data.buffer, &offset);
+	vkCmdBindIndexBuffer(command_buffer, user->model_index_data.buffer, offset, VK_INDEX_TYPE_UINT16);
+	vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, user->program->pipeline_layout, 0, 1, &user->model_descriptors, 0, nullptr);
 
-	if (ImDrawData* imgui_data = ImGui::GetDrawData(); imgui_data)
-	{
-		ImGui_ImplVulkan_RenderDrawData(imgui_data, command_buffer);
-	}
+	vkCmdDrawIndexed(command_buffer, user->model_index_count, 1, 0, 0, 0);
 
 	acp_vulkan::renderer_end_main_pass(command_buffer, context, false);
 	return true;
-}
-
-static void init_imgui(acp_vulkan::renderer_context* context)
-{
-	VkDescriptorPoolSize pool_sizes[] =
-	{
-		{ VK_DESCRIPTOR_TYPE_SAMPLER, 16 },
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16 },
-		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 16 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 16 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 16 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 16 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 16 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 16 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 16 },
-		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 16 }
-	};
-
-	VkDescriptorPoolCreateInfo pool_info = {};
-	pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	pool_info.maxSets = 128;
-	pool_info.poolSizeCount = sizeof(pool_sizes) / sizeof(pool_sizes[0]);
-	pool_info.pPoolSizes = pool_sizes;
-
-	VkDescriptorPool imgui_pool{ VK_NULL_HANDLE };
-	ACP_VK_CHECK(vkCreateDescriptorPool(context->logical_device, &pool_info, context->host_allocator, &imgui_pool),context);
-	gltf_user_context* user = reinterpret_cast<gltf_user_context*>(context->user_context.user_data);
-	user->descriptor_pools.push_back(imgui_pool);
-	//initialize imgui library
-	ImGui::CreateContext();
-
-#ifdef _WIN32
-	void* main_window_handle = acp_vulkan_os_specific_get_main_window_handle();
-	ImGui_ImplWin32_Init(main_window_handle); 
-#else
-	#error Not implemented for this platform.
-#endif
-
-	//TODO(Alex) : Save the settings for imgui in a proper way.
-	ImGuiIO& io = ImGui::GetIO();
-	io.IniFilename = nullptr;
-	io.LogFilename = nullptr;
-
-	size_t font_size = 0;
-	uint32_t* font_data = nullptr;
-	bool has_font = load_binary_data("./fonts/Cousine-Regular.ttf", &font_data, font_size);
-	if (!has_font)
-	{
-#ifdef ENABLE_DEBUG_CONSOLE
-		printf("Unable to load the imgui font\n");
-#endif
-		abort();
-	}
-	const ImFontConfig font_config{};
-	ImFont* font = io.Fonts->AddFontFromMemoryTTF(font_data, static_cast<int>(font_size * sizeof(uint32_t)), 16.0f);
-	if (font)
-		io.FontDefault = font;
-
-	size_t frag_size = 0;
-	uint32_t* frag_data = nullptr;
-	bool has_frag = load_binary_data("./shaders/imgui.frag.spv", &frag_data, frag_size);
-
-	size_t vert_size = 0;
-	uint32_t* vert_data = nullptr;
-	bool has_vert = load_binary_data("./shaders/imgui.vert.spv", &vert_data, vert_size);
-
-	if (!has_frag || !has_vert)
-	{
-#ifdef ENABLE_DEBUG_CONSOLE
-		printf("Unable to load the imgui shaders\n");
-#endif
-		abort();
-	}
-
-	//this initializes imgui for Vulkan
-	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.Instance = context->instance;
-	init_info.PhysicalDevice = context->physical_device;
-	init_info.Device = context->logical_device;
-	init_info.Queue = context->graphics_queue;
-	init_info.DescriptorPool = imgui_pool;
-	init_info.MinImageCount = 3;
-	init_info.ImageCount = 3;
-	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-	init_info.UseDynamicRendering = true;
-	init_info.ColorAttachmentFormat = context->swapchain_format;
-	init_info.DepthAttachmentFormat = context->depth_format;
-	init_info.GPUAllocator = context->gpu_allocator;
-	init_info.VertData = vert_data;
-	init_info.VertSize = vert_size;
-	init_info.FragData = frag_data;
-	init_info.FragSize = frag_size;
-
-	ImGui_ImplVulkan_Init(&init_info, VK_NULL_HANDLE);
-
-	_aligned_free(frag_data);
-	_aligned_free(vert_data);
-
-	//execute a gpu command to upload imgui font textures
-	immediate_submit(context, [&](VkCommandBuffer) {
-		ImGui_ImplVulkan_CreateFontsTexture();
-		});
-
-	_aligned_free(font_data);
 }
 
 static bool user_init(acp_vulkan::renderer_context* context)
@@ -220,11 +99,28 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		user->descriptor_pools.push_back(acp_vulkan::descriptor_pool_create(context, 128, "user_descriptor_pools"));
 	}
 
-	char* model_data = nullptr;
-	size_t model_data_size = 0;
-	load_binary_data("./models/avocado/avocado.gltf", &model_data, model_data_size);
+	user->vertex_shader = acp_vulkan::shader_init(context->logical_device, context->host_allocator, "./shaders/gltf.vert.spv");
+	user->fragment_shader = acp_vulkan::shader_init(context->logical_device, context->host_allocator, "./shaders/gltf.frag.spv");
+
+	acp_vulkan::input_attribute_data vertex_shader_input_attributes{};
+	vertex_shader_input_attributes.binding = 0;
+	vertex_shader_input_attributes.input_rate = VK_VERTEX_INPUT_RATE_VERTEX;
+	vertex_shader_input_attributes.offsets = {
+		offsetof(gltf_user_context::model_vertex, uv),
+		offsetof(gltf_user_context::model_vertex, position) };
+	vertex_shader_input_attributes.locations = { 0, 1 };
+	vertex_shader_input_attributes.stride = sizeof(gltf_user_context::model_vertex);
+
+	user->program = acp_vulkan::graphics_program_init(
+		context->logical_device, context->host_allocator,
+		{ user->vertex_shader, user->fragment_shader }, { vertex_shader_input_attributes }, 0, true, true, true, 1,
+		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED, "quad_with_texture_pipeline");
 
 	{
+		char* model_data = nullptr;
+		size_t model_data_size = 0;
+		load_binary_data("./models/avocado/avocado.gltf", &model_data, model_data_size);
+
 		tinygltf::Model gltf_model;
 		tinygltf::TinyGLTF gltf_loader;
 		std::string errors;
@@ -232,46 +128,81 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		gltf_loader.LoadASCIIFromString(&gltf_model, &errors, &warnings, reinterpret_cast<char*>(model_data), unsigned int(model_data_size), "models/avocado", true);
 		_aligned_free(model_data);
 
+		auto read_gltf_data_to_array = [](const tinygltf::Model* model, size_t accessor, size_t element_size, char* target_array, size_t target_array_stride)
+		{
+			const tinygltf::BufferView& buffer_view = model->bufferViews[model->accessors[accessor].bufferView];
+			const tinygltf::Buffer& buffer = model->buffers[buffer_view.buffer];
+			const unsigned char* source_data = buffer.data.data() + buffer_view.byteOffset;
+			for (size_t ii = 0; ii < model->accessors[accessor].count; ++ii)
+			{
+				const unsigned char* source_ptr = source_data + ii * element_size;
+				char* dest_ptr = target_array + (target_array_stride * ii);
+				memcpy(dest_ptr, source_ptr, element_size);
+			}
+		};
+
 		std::vector<uint16_t> model_index_data(gltf_model.accessors[4].count);
+		user->model_index_count = uint32_t(gltf_model.accessors[4].count);
 		read_gltf_data_to_array(&gltf_model, 4, sizeof(uint16_t), reinterpret_cast<char*>(model_index_data.data()), sizeof(uint16_t));
 
 		std::vector<gltf_user_context::model_vertex> model_interlived_data(gltf_model.accessors[0].count);
 		//uv
 		read_gltf_data_to_array(&gltf_model, 0, sizeof(float) * 2, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, uv), sizeof(gltf_user_context::model_vertex));
-		//normal
-		read_gltf_data_to_array(&gltf_model, 1, sizeof(float) * 3, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, normal), sizeof(gltf_user_context::model_vertex));
-		//tangent
-		read_gltf_data_to_array(&gltf_model, 2, sizeof(float) * 4, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, tangent), sizeof(gltf_user_context::model_vertex));
 		//position
 		read_gltf_data_to_array(&gltf_model, 3, sizeof(float) * 3, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, position), sizeof(gltf_user_context::model_vertex));
 
-		init_imgui(context);
-
 		user->model_vertex_data = acp_vulkan::upload_data(context, model_interlived_data.data(), uint32_t(gltf_model.accessors[0].count), sizeof(gltf_user_context::model_vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, "avocado_vertex_buffer");
-		user->model_index_data = acp_vulkan::upload_data(context, model_interlived_data.data(), uint32_t(gltf_model.accessors[4].count), sizeof(gltf_user_context::model_vertex), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, "avocado_index_buffer");
+		user->model_index_data = acp_vulkan::upload_data(context, model_index_data.data(), uint32_t(gltf_model.accessors[4].count), sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, "avocado_index_buffer");
 
-		//todo textures
-		//todo textures views
+		user->model_color_texture_sampler = acp_vulkan::create_linear_sampler(context, "avocado_color_sampler");
+
+		user->model_descriptors = VK_NULL_HANDLE;
+		VkDescriptorSetAllocateInfo descriptor_info = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+		descriptor_info.descriptorPool = user->descriptor_pools[0];
+		descriptor_info.descriptorSetCount = 1;
+		descriptor_info.pSetLayouts = &user->program->descriptor_layouts[0].first;
+		ACP_VK_CHECK(vkAllocateDescriptorSets(context->logical_device, &descriptor_info, &user->model_descriptors), context);
+
+		auto load_texture = [](acp_vulkan::renderer_context* context, const std::string& texture_name, uint32_t binding, const char* texture_prefix, acp_vulkan::image_data&	texture, VkImageView& texture_view, VkSampler sampler, VkDescriptorSet descriptor) {
+			char texture_buffer_path[256];
+			sprintf(texture_buffer_path, "%s/%s", texture_prefix, texture_name.c_str());
+			acp_vulkan::dds_data dds_data = acp_vulkan::dds_data_from_file(texture_buffer_path, context->host_allocator);
+			texture = acp_vulkan::upload_image(context, dds_data.image_mip_data, dds_data.image_create_info, "test.dds");
+			VkImageViewCreateInfo image_view_info = acp_vulkan::dds_data_create_view_info(&dds_data, texture.image);
+			vkCreateImageView(context->logical_device, &image_view_info, context->host_allocator, &texture_view);
+			acp_vulkan::dds_data_free(&dds_data, context->host_allocator);
+
+			VkDescriptorImageInfo image_info;
+			image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			image_info.sampler = sampler;
+			image_info.imageView = texture_view;
+
+			VkWriteDescriptorSet descriptorWrite{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+			descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrite.dstSet = descriptor;
+			descriptorWrite.descriptorCount = 1;
+			descriptorWrite.dstBinding = binding;
+			descriptorWrite.dstArrayElement = 0;
+			descriptorWrite.pImageInfo = &image_info;
+			vkUpdateDescriptorSets(context->logical_device, 1, &descriptorWrite, 0, nullptr);
+		};
+
+		const std::string& color_texture_name = gltf_model.images[gltf_model.materials[0].pbrMetallicRoughness.baseColorTexture.index].uri;
+		load_texture(context, color_texture_name, 0, "models/avocado", user->model_color_texture, user->model_color_texture_view, user->model_color_texture_sampler, user->model_descriptors);
 	}
-	user->model_texture_sampler = acp_vulkan::create_linear_sampler(context, "avocado_sampler");
-
-	//todo descriptors
 
 	return true;
 }
 
 static void user_shutdown(acp_vulkan::renderer_context* context)
 {
-#ifdef _WIN32
-	ImGui_ImplWin32_Shutdown();
-#else
-#error Not implemented for this platform.
-#endif
-	ImGui_ImplVulkan_Shutdown();
-
 	gltf_user_context* user = reinterpret_cast<gltf_user_context*>(context->user_context.user_data);
 
-	vkDestroySampler(context->logical_device,user->model_texture_sampler, context->host_allocator);
+	vkDestroySampler(context->logical_device, user->model_color_texture_sampler, context->host_allocator);
+
+	vkDestroyImageView(context->logical_device, user->model_color_texture_view, context->host_allocator);
+
+	acp_vulkan::image_destroy(context, user->model_color_texture);
 
 	vmaDestroyBuffer(context->gpu_allocator, user->model_vertex_data.buffer, user->model_vertex_data.allocation);
 	vmaDestroyBuffer(context->gpu_allocator, user->model_index_data.buffer, user->model_index_data.allocation);
@@ -283,6 +214,10 @@ static void user_shutdown(acp_vulkan::renderer_context* context)
 	for (int i = 0; i < user->commands_pools.size(); ++i)
 		commands_pool_destroy(context, user->commands_pools[i]);
 	user->commands_pools.clear();
+
+	acp_vulkan::program_destroy(context->logical_device, context->host_allocator, user->program);
+	acp_vulkan::shader_destroy(context->logical_device, context->host_allocator, user->fragment_shader);
+	acp_vulkan::shader_destroy(context->logical_device, context->host_allocator, user->vertex_shader);
 
 	delete user;
 }

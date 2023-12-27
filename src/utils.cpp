@@ -48,16 +48,3 @@ bool load_binary_data(const char* filePath, char** out, size_t& out_size)
 {
 	return load_binary_data_internal(filePath, alignof(char), reinterpret_cast<char**>(out), out_size);
 }
-
-void read_gltf_data_to_array(const tinygltf::Model* model, size_t accessor, size_t element_size, char* target_array, size_t target_array_stride)
-{
-	const tinygltf::BufferView& buffer_view = model->bufferViews[model->accessors[accessor].bufferView];
-	const tinygltf::Buffer& buffer = model->buffers[buffer_view.buffer];
-	const unsigned char* source_data = buffer.data.data() + buffer_view.byteOffset;
-	for (size_t ii = 0; ii < model->accessors[accessor].count; ++ii)
-	{
-		const unsigned char* source_ptr = source_data + ii * element_size;
-		char* dest_ptr = target_array + (target_array_stride * ii);
-		memcpy(dest_ptr, source_ptr, element_size);
-	}
-}
