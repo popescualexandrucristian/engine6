@@ -59,6 +59,8 @@ target_sources(acp_vulkan PRIVATE
     acp_vulkan/acp_debug_vulkan.cpp
     acp_vulkan/acp_dds_vulkan.h
     acp_vulkan/acp_dds_vulkan.cpp
+	acp_vulkan/acp_gltf_vulkan.h
+    acp_vulkan/acp_gltf_vulkan.cpp
 	acp_vulkan/acp_program_vulkan.h
     acp_vulkan/acp_program_vulkan.cpp
 	acp_vulkan/acp_context/acp_vulkan_context.h

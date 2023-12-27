@@ -7,6 +7,7 @@
 
 #include <utils.h>
 
+#include <acp_gltf_vulkan.h>
 #include <tiny_gltf.h>
 
 struct gltf_user_context
@@ -110,6 +111,17 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		offsetof(gltf_user_context::model_vertex, position) };
 	vertex_shader_input_attributes.locations = { 0, 1 };
 	vertex_shader_input_attributes.stride = sizeof(gltf_user_context::model_vertex);
+
+	{
+		char* model_data = nullptr;
+		size_t model_data_size = 0;
+		load_binary_data("./models/avocado/avocado.gltf", &model_data, model_data_size);
+
+		acp_vulkan::gltf_data gltf_data = acp_vulkan::gltf_data_from_memory(model_data, model_data_size);
+
+		(void)model_data, model_data_size, gltf_data;
+		_aligned_free(model_data);
+	}
 
 	user->program = acp_vulkan::graphics_program_init(
 		context->logical_device, context->host_allocator,

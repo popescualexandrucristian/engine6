@@ -150,7 +150,7 @@ static void init_imgui(acp_vulkan::renderer_context* context)
 	#error Not implemented for this platform.
 #endif
 
-	//TODO(Alex) : Save the settings for imgui in a proper way.
+	//todo(alex) : Save the settings for imgui in a proper way.
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = nullptr;
 	io.LogFilename = nullptr;
