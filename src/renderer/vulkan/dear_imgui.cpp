@@ -207,15 +207,15 @@ static void init_imgui(acp_vulkan::renderer_context* context)
 
 	ImGui_ImplVulkan_Init(&init_info, VK_NULL_HANDLE);
 
-	_aligned_free(frag_data);
-	_aligned_free(vert_data);
+	free_binary_data(frag_data);
+	free_binary_data(vert_data);
 
 	//execute a gpu command to upload imgui font textures
 	immediate_submit(context, [&](VkCommandBuffer) {
 		ImGui_ImplVulkan_CreateFontsTexture();
 		});
 
-	_aligned_free(font_data);
+	free_binary_data(font_data);
 }
 
 static bool user_init(acp_vulkan::renderer_context* context)

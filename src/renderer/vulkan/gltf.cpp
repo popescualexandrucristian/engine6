@@ -7,7 +7,7 @@
 
 #include <utils.h>
 
-#include <tiny_gltf.h>
+#include <acp_gltf_vulkan.h>
 
 struct gltf_user_context
 {
@@ -117,42 +117,36 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		&context->swapchain_format, context->depth_format, VK_FORMAT_UNDEFINED, "quad_with_texture_pipeline");
 
 	{
-		char* model_data = nullptr;
-		size_t model_data_size = 0;
-		load_binary_data("./models/avocado/avocado.gltf", &model_data, model_data_size);
+		acp_vulkan::gltf_data gltf_model = acp_vulkan::gltf_data_from_file("./models/avocado/avocado.gltf", context->host_allocator);
+		char* gltf_buffer_data = nullptr;
+		size_t gltf_buffer_data_size = 0;
+		load_binary_data("./models/avocado/avocado.bin", &gltf_buffer_data, gltf_buffer_data_size);
 
-		tinygltf::Model gltf_model;
-		tinygltf::TinyGLTF gltf_loader;
-		std::string errors;
-		std::string warnings;
-		gltf_loader.LoadASCIIFromString(&gltf_model, &errors, &warnings, reinterpret_cast<char*>(model_data), unsigned int(model_data_size), "models/avocado", true);
-		_aligned_free(model_data);
-
-		auto read_gltf_data_to_array = [](const tinygltf::Model* model, size_t accessor, size_t element_size, char* target_array, size_t target_array_stride)
+		auto read_gltf_data_to_array = [](const acp_vulkan::gltf_data& model, char* buffer_data, size_t accessor, size_t element_size, char* target_array, size_t target_array_stride)
 		{
-			const tinygltf::BufferView& buffer_view = model->bufferViews[model->accessors[accessor].bufferView];
-			const tinygltf::Buffer& buffer = model->buffers[buffer_view.buffer];
-			const unsigned char* source_data = buffer.data.data() + buffer_view.byteOffset;
-			for (size_t ii = 0; ii < model->accessors[accessor].count; ++ii)
+			const acp_vulkan::gltf_data::buffer_view& buffer_view = model.buffer_views.data[model.accesors.data[accessor].buffer_view];
+			//const acp_vulkan::gltf_data::buffer& buffer = model.buffers.data[buffer_view.buffer];
+			const char* source_data = buffer_data + buffer_view.byte_offset;
+			for (size_t ii = 0; ii < model.accesors.data[accessor].count; ++ii)
 			{
-				const unsigned char* source_ptr = source_data + ii * element_size;
+				const char* source_ptr = source_data + ii * element_size;
 				char* dest_ptr = target_array + (target_array_stride * ii);
 				memcpy(dest_ptr, source_ptr, element_size);
 			}
 		};
 
-		std::vector<uint16_t> model_index_data(gltf_model.accessors[4].count);
-		user->model_index_count = uint32_t(gltf_model.accessors[4].count);
-		read_gltf_data_to_array(&gltf_model, 4, sizeof(uint16_t), reinterpret_cast<char*>(model_index_data.data()), sizeof(uint16_t));
+		std::vector<uint16_t> model_index_data(gltf_model.accesors.data[4].count);
+		user->model_index_count = uint32_t(gltf_model.accesors.data[4].count);
+		read_gltf_data_to_array(gltf_model, gltf_buffer_data, 4, sizeof(uint16_t), reinterpret_cast<char*>(model_index_data.data()), sizeof(uint16_t));
 
-		std::vector<gltf_user_context::model_vertex> model_interlived_data(gltf_model.accessors[0].count);
+		std::vector<gltf_user_context::model_vertex> model_interlived_data(gltf_model.accesors.data[0].count);
 		//uv
-		read_gltf_data_to_array(&gltf_model, 0, sizeof(float) * 2, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, uv), sizeof(gltf_user_context::model_vertex));
+		read_gltf_data_to_array(gltf_model, gltf_buffer_data, 0, sizeof(float) * 2, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, uv), sizeof(gltf_user_context::model_vertex));
 		//position
-		read_gltf_data_to_array(&gltf_model, 3, sizeof(float) * 3, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, position), sizeof(gltf_user_context::model_vertex));
+		read_gltf_data_to_array(gltf_model, gltf_buffer_data, 3, sizeof(float) * 3, reinterpret_cast<char*>(model_interlived_data.data()) + offsetof(gltf_user_context::model_vertex, position), sizeof(gltf_user_context::model_vertex));
 
-		user->model_vertex_data = acp_vulkan::upload_data(context, model_interlived_data.data(), uint32_t(gltf_model.accessors[0].count), sizeof(gltf_user_context::model_vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, "avocado_vertex_buffer");
-		user->model_index_data = acp_vulkan::upload_data(context, model_index_data.data(), uint32_t(gltf_model.accessors[4].count), sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, "avocado_index_buffer");
+		user->model_vertex_data = acp_vulkan::upload_data(context, model_interlived_data.data(), uint32_t(gltf_model.accesors.data[0].count), sizeof(gltf_user_context::model_vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, "avocado_vertex_buffer");
+		user->model_index_data = acp_vulkan::upload_data(context, model_index_data.data(), uint32_t(gltf_model.accesors.data[4].count), sizeof(uint16_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, "avocado_index_buffer");
 
 		user->model_color_texture_sampler = acp_vulkan::create_linear_sampler(context, "avocado_color_sampler");
 
@@ -163,9 +157,9 @@ static bool user_init(acp_vulkan::renderer_context* context)
 		descriptor_info.pSetLayouts = &user->program->descriptor_layouts[0].first;
 		ACP_VK_CHECK(vkAllocateDescriptorSets(context->logical_device, &descriptor_info, &user->model_descriptors), context);
 
-		auto load_texture = [](acp_vulkan::renderer_context* context, const std::string& texture_name, uint32_t binding, const char* texture_prefix, acp_vulkan::image_data&	texture, VkImageView& texture_view, VkSampler sampler, VkDescriptorSet descriptor) {
+		auto load_texture = [](acp_vulkan::renderer_context* context, const acp_vulkan::gltf_data::string_view texture_name, uint32_t binding, const char* texture_prefix, acp_vulkan::image_data&	texture, VkImageView& texture_view, VkSampler sampler, VkDescriptorSet descriptor) {
 			char texture_buffer_path[256];
-			sprintf(texture_buffer_path, "%s/%s", texture_prefix, texture_name.c_str());
+			sprintf(texture_buffer_path, "%s/%.*s", texture_prefix, int(texture_name.data_length), texture_name.data);
 			acp_vulkan::dds_data dds_data = acp_vulkan::dds_data_from_file(texture_buffer_path, context->host_allocator);
 			texture = acp_vulkan::upload_image(context, dds_data.image_mip_data, dds_data.image_create_info, texture_buffer_path);
 			VkImageViewCreateInfo image_view_info = acp_vulkan::dds_data_create_view_info(&dds_data, texture.image);
@@ -187,8 +181,11 @@ static bool user_init(acp_vulkan::renderer_context* context)
 			vkUpdateDescriptorSets(context->logical_device, 1, &descriptorWrite, 0, nullptr);
 		};
 
-		const std::string& color_texture_name = gltf_model.images[gltf_model.materials[0].pbrMetallicRoughness.baseColorTexture.index].uri;
+		const acp_vulkan::gltf_data::string_view color_texture_name = gltf_model.images.data[gltf_model.materials.data[0].pbr_metallic_roughness.base_color_texture.index].uri;
 		load_texture(context, color_texture_name, 0, "models/avocado", user->model_color_texture, user->model_color_texture_view, user->model_color_texture_sampler, user->model_descriptors);
+
+		acp_vulkan::gltf_data_free(&gltf_model, context->host_allocator);
+		free_binary_data(gltf_buffer_data);
 	}
 
 	return true;

@@ -3,9 +3,6 @@ find_package(Vulkan REQUIRED)
 add_library(vma INTERFACE)
 target_include_directories(vma INTERFACE vma)
 
-add_library(nlohmann_json INTERFACE)
-target_include_directories(nlohmann_json INTERFACE nlohmann_json)
-
 add_library(stb STATIC)
 target_include_directories(stb PUBLIC stb)
 if(USE_STATIC_CRT AND MSVC)
@@ -23,24 +20,6 @@ target_sources(stb PRIVATE
     stb/stb_image.cpp
 )
 target_compile_definitions(stb PRIVATE ${COMPILATION_DEFINES})
-
-add_library(tiny_gltf STATIC)
-target_include_directories(tiny_gltf PUBLIC tiny_gltf)
-if(USE_STATIC_CRT AND MSVC)
-	target_compile_options(tiny_gltf PRIVATE /MT)
-	target_link_options(tiny_gltf PRIVATE /INCREMENTAL:NO /NODEFAULTLIB:MSVCRT)
-elseif(ENABLE_ADDRESS_SENITIZER)
-	target_compile_options(tiny_gltf PRIVATE "$<$<CONFIG:DEBUG>:/fsanitize=address>")
-	target_compile_options(tiny_gltf PRIVATE "$<$<CONFIG:RelWithDebInfo>:/fsanitize=address>")
-	target_link_options(tiny_gltf PRIVATE /INCREMENTAL:NO)
-endif()
-set_property(TARGET tiny_gltf PROPERTY FOLDER "libraries")
-target_sources(tiny_gltf PRIVATE 
-    tiny_gltf/tiny_gltf.h
-	tiny_gltf/tiny_gltf.cpp
-)
-target_compile_definitions(tiny_gltf PRIVATE ${COMPILATION_DEFINES})
-target_link_libraries(tiny_gltf stb nlohmann_json)
 
 add_library(acp_vulkan STATIC)
 

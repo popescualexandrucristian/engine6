@@ -83,8 +83,7 @@ set(LIBS
 	acp_vulkan
 	vma
 	imgui
-	nlohmann_json
-	tiny_gltf
+	stb
 )
 
 #main

@@ -28,7 +28,7 @@ static bool load_binary_data_internal(const char* filePath, size_t allignment_fo
 
 	if (total_bytes_in_file != total_read_bytes)
 	{
-		_aligned_free(local);
+		free_binary_data(local);
 		out = nullptr;
 		out_size = 0;
 		return false;
@@ -47,4 +47,9 @@ bool load_binary_data(const char* filePath, uint32_t** out, size_t& out_size)
 bool load_binary_data(const char* filePath, char** out, size_t& out_size)
 {
 	return load_binary_data_internal(filePath, alignof(char), reinterpret_cast<char**>(out), out_size);
+}
+
+void free_binary_data(void* data)
+{
+	_aligned_free(data);
 }
