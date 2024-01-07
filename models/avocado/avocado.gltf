@@ -137,13 +137,20 @@
   ],
   "textures": [
     {
-      "source": 0
+      "source": 0,
+	  "extensions": {
+            "MSFT_texture_dds": {
+                "source": 0
+            }
+        }
     },
     {
-      "source": 1
-    },
-    {
-      "source": 2
+      "source": 1,
+	  "extensions": {
+            "MSFT_texture_dds": {
+                "source": 1
+            }
+        }
     }
   ]
 }
